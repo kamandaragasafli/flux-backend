@@ -1,4 +1,4 @@
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -11,13 +11,17 @@ from datetime import timedelta
 import requests
 import os
 
-from .models import Route, LocationPoint
+from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification
 from .serializers import (
     LoginSerializer,
     RouteSerializer,
     StartRouteSerializer,
     StopRouteSerializer,
     CreateLocationSerializer,
+    VisitScheduleSerializer,
+    HospitalVisitSerializer,
+    UserProfileSerializer,
+    NotificationSerializer,
 )
 
 # SSL uyarılarını bastır (development için)
@@ -59,6 +63,73 @@ class StopRouteView(APIView):
         return Response(RouteSerializer(route).data, status=status.HTTP_200_OK)
 
 
+class PauseRouteView(APIView):
+    """Aktif route'u duraklatır (Doktor odasında)"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        route = Route.objects.filter(user=user, end_time__isnull=True).order_by('-start_time').first()
+        
+        if not route:
+            return Response(
+                {"detail": "Aktif route bulunamadı."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if route.is_paused:
+            return Response(
+                {"detail": "Route zaten duraklatılmış."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        route.is_paused = True
+        route.paused_at = timezone.now()
+        route.save(update_fields=['is_paused', 'paused_at'])
+        
+        return Response({
+            "message": "Route duraklatıldı.",
+            "route_id": route.id,
+            "paused_at": route.paused_at
+        })
+
+
+class ResumeRouteView(APIView):
+    """Duraklatılmış route'u devam ettirir"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        route = Route.objects.filter(user=user, end_time__isnull=True).order_by('-start_time').first()
+        
+        if not route:
+            return Response(
+                {"detail": "Aktif route bulunamadı."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if not route.is_paused:
+            return Response(
+                {"detail": "Route duraklatılmamış."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Duraklatma süresini hesapla
+        if route.paused_at:
+            pause_duration = (timezone.now() - route.paused_at).total_seconds()
+            route.total_paused_duration += int(pause_duration)
+        
+        route.is_paused = False
+        route.paused_at = None
+        route.save(update_fields=['is_paused', 'paused_at', 'total_paused_duration'])
+        
+        return Response({
+            "message": "Route devam ettiriliyor.",
+            "route_id": route.id,
+            "total_paused_duration": route.total_paused_duration
+        })
+
+
 class CreateLocationView(generics.CreateAPIView):
     serializer_class = CreateLocationSerializer
 
@@ -79,12 +150,20 @@ class CurrentUserView(APIView):
 
     def get(self, request):
         user = request.user
+        # Profil bilgilerini al veya oluştur
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        
         return Response({
             "id": user.id,
             "username": user.username,
             "email": user.email,
             "first_name": user.first_name,
             "last_name": user.last_name,
+            "profile": {
+                "regions": profile.regions,
+                "cities": profile.cities,
+                "has_completed_profile": len(profile.regions) > 0 and len(profile.cities) > 0
+            }
         })
 
     def patch(self, request):
@@ -92,7 +171,7 @@ class CurrentUserView(APIView):
         user = request.user
         data = request.data
 
-        # Güncellenebilir alanlar
+        # Kullanıcı bilgileri
         if 'username' in data:
             user.username = data['username']
         if 'email' in data:
@@ -102,20 +181,54 @@ class CurrentUserView(APIView):
         if 'last_name' in data:
             user.last_name = data['last_name']
 
+        # Profil bilgileri
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        if 'regions' in data:
+            regions = data['regions']
+            if len(regions) > 3:
+                return Response(
+                    {"detail": "Maksimum 3 bölge seçebilirsiniz."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            profile.regions = regions
+        if 'cities' in data:
+            cities = data['cities']
+            if len(cities) > 3:
+                return Response(
+                    {"detail": "Maksimum 3 şehir seçebilirsiniz."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            profile.cities = cities
+
         try:
             user.save()
+            profile.save()
             return Response({
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
+                "profile": {
+                    "regions": profile.regions,
+                    "cities": profile.cities,
+                    "has_completed_profile": len(profile.regions) > 0 and len(profile.cities) > 0
+                }
             }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
                 {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class RoutesListView(generics.ListAPIView):
+    """Kullanıcının tüm route'larını listeler"""
+    serializer_class = RouteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Route.objects.filter(user=self.request.user).order_by('-start_time')
 
 
 class LastLocationsView(APIView):
@@ -137,6 +250,7 @@ class LastLocationsView(APIView):
                 features.append({
                     "id": user.id,
                     "ad": user.username,
+                    "username": user.username,  # Dashboard için
                     "lat": float(last_location.latitude),
                     "lng": float(last_location.longitude),
                 })
@@ -144,6 +258,69 @@ class LastLocationsView(APIView):
         return Response({
             "features": features
         })
+
+
+class NotificationListView(generics.ListAPIView):
+    """Kullanıcının bildirimlerini listele"""
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user)
+
+
+class NotificationCreateView(APIView):
+    """Dashboard'dan kullanıcıya bildirim gönder (Admin only)"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        notification_type = request.data.get('notification_type', 'message')
+        title = request.data.get('title')
+        message = request.data.get('message')
+        
+        if not user_id or not title or not message:
+            return Response(
+                {"detail": "user_id, title və message lazımdır."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "İstifadəçi tapılmadı."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        notification = Notification.objects.create(
+            user=user,
+            notification_type=notification_type,
+            title=title,
+            message=message
+        )
+        
+        return Response(
+            NotificationSerializer(notification).data,
+            status=status.HTTP_201_CREATED
+        )
+
+
+class NotificationMarkReadView(APIView):
+    """Bildirimi okundu olarak işaretle"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, pk):
+        try:
+            notification = Notification.objects.get(pk=pk, user=request.user)
+            notification.is_read = True
+            notification.save(update_fields=['is_read'])
+            return Response({"message": "Bildirim oxundu olaraq işarələndi."})
+        except Notification.DoesNotExist:
+            return Response(
+                {"detail": "Bildirim tapılmadı."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 
 # Admin Dashboard View
@@ -174,10 +351,22 @@ def admin_dashboard(request):
         last_activity=Max('routes__start_time')
     ).order_by('-date_joined')[:50]
     
-    # Aktif route'lar
+    # Aktif route'lar - bağlantı durumları ile
     active_routes_list = Route.objects.filter(
         end_time__isnull=True
     ).select_related('user').prefetch_related('points').order_by('-start_time')[:20]
+    
+    # Her route için ek bilgiler
+    routes_data = []
+    for route in active_routes_list:
+        last_point = route.points.last()
+        routes_data.append({
+            'route': route,
+            'last_point': last_point,
+            'connection_status': route.connection_status,
+            'is_paused': route.is_paused,
+            'point_count': route.points.count(),
+        })
     
     # Son location point'ler
     recent_locations = LocationPoint.objects.select_related(
@@ -194,7 +383,49 @@ def admin_dashboard(request):
         'locations_last_24h': locations_last_24h,
         'users': users,
         'active_routes_list': active_routes_list,
+        'routes_data': routes_data,
         'recent_locations': recent_locations,
     }
     
     return render(request, 'dashboard.html', context)
+
+
+class VisitScheduleViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing visit schedules
+    - List all schedules for the authenticated user
+    - Create new schedule
+    - Update existing schedule
+    - Delete schedule
+    """
+    serializer_class = VisitScheduleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Her kullanıcı sadece kendi planlarını görebilir
+        return VisitSchedule.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save()
+    
+    def perform_update(self, serializer):
+        serializer.save()
+
+
+class HospitalVisitViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing hospital visits
+    - List all visits for the authenticated user
+    - Create new visit
+    - Update existing visit
+    - Delete visit
+    """
+    serializer_class = HospitalVisitSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Her kullanıcı sadece kendi ziyaretlerini görebilir
+        return HospitalVisit.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save()

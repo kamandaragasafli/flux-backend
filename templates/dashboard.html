@@ -1,9 +1,16 @@
 <!DOCTYPE html>
-<html lang="az">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solvey Tracker - Admin Dashboard</title>
+    <title>Solvey Tracker - Admin Panel</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
     <style>
         * {
             margin: 0;
@@ -12,408 +19,1441 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+            overflow-x: hidden;
         }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            width: 280px;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            padding: 0;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            z-index: 1000;
+            overflow-y: auto;
         }
 
-        .header {
-            background: white;
-            border-radius: 16px;
+        .logo {
             padding: 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo h2 {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo h2 i {
+            color: #3b82f6;
+            font-size: 28px;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 20px 15px;
+        }
+
+        .nav-item {
+            margin-bottom: 5px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 20px;
+            color: #94a3b8;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            transform: translateX(5px);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+        }
+
+        .nav-link i {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            padding: 30px;
+            min-height: 100vh;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: white;
+            padding: 25px 35px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             margin-bottom: 30px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .header h1 {
-            color: #1F2937;
+        .top-bar h1 {
             font-size: 32px;
+            color: #1e293b;
             font-weight: 800;
-            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
 
-        .header p {
-            color: #6B7280;
-            font-size: 16px;
+        .top-bar-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
         }
 
+        .btn {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        /* Sections */
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
             margin-bottom: 30px;
         }
 
         .stat-card {
             background: white;
-            border-radius: 16px;
-            padding: 25px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5px;
+            height: 100%;
+            background: var(--accent-color);
         }
 
         .stat-card:hover {
-            transform: translateY(-5px);
+            transform: translateY(-8px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.15);
         }
 
-        .stat-card h3 {
-            color: #6B7280;
-            font-size: 14px;
-            font-weight: 600;
+        .stat-card.blue { --accent-color: #3b82f6; }
+        .stat-card.green { --accent-color: #10b981; }
+        .stat-card.orange { --accent-color: #f59e0b; }
+        .stat-card.red { --accent-color: #ef4444; }
+        .stat-card.purple { --accent-color: #8b5cf6; }
+        .stat-card.pink { --accent-color: #ec4899; }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            background: var(--accent-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: #64748b;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
             margin-bottom: 10px;
         }
 
-        .stat-card .value {
-            color: #1F2937;
-            font-size: 36px;
-            font-weight: 800;
-            margin-bottom: 5px;
+        .stat-value {
+            font-size: 42px;
+            font-weight: 900;
+            color: #1e293b;
+            line-height: 1;
+            margin-bottom: 8px;
         }
 
-        .stat-card .subtitle {
-            color: #9CA3AF;
-            font-size: 13px;
+        .stat-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+            font-weight: 500;
         }
 
-        .stat-card.primary { border-left: 4px solid #3B82F6; }
-        .stat-card.success { border-left: 4px solid #10B981; }
-        .stat-card.warning { border-left: 4px solid #F59E0B; }
-        .stat-card.danger { border-left: 4px solid #EF4444; }
-
+        /* Content Grid */
         .content-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
+            grid-template-columns: 2fr 1fr;
+            gap: 25px;
             margin-bottom: 30px;
         }
 
-        @media (max-width: 1024px) {
-            .content-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
+        /* Card */
         .card {
             background: white;
-            border-radius: 16px;
-            padding: 25px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow: hidden;
         }
 
         .card-header {
+            padding: 25px 30px;
+            border-bottom: 2px solid #f1f5f9;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #F3F4F6;
+            background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
         }
 
-        .card-header h2 {
-            color: #1F2937;
+        .card-header h3 {
             font-size: 20px;
-            font-weight: 700;
+            font-weight: 800;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .card-header a {
-            color: #3B82F6;
-            text-decoration: none;
+        .card-header h3 i {
+            color: #3b82f6;
+            font-size: 22px;
+        }
+
+        .card-body {
+            padding: 30px;
+        }
+
+        /* Map */
+        #map {
+            height: 550px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .card-header a:hover {
-            text-decoration: underline;
+        .form-control {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.3s;
+            font-family: inherit;
+            background: #f8fafc;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            transform: translateY(-2px);
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        /* Table */
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
+            background: white;
         }
 
         thead {
-            background: #F9FAFB;
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
         }
 
         th {
+            padding: 18px 24px;
             text-align: left;
-            padding: 12px;
-            color: #6B7280;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 800;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 3px solid #cbd5e1;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #f1f5f9;
+            transition: all 0.2s;
+        }
+
+        tbody tr:hover {
+            background: linear-gradient(90deg, #f8fafc 0%, #ffffff 100%);
+            transform: scale(1.01);
+        }
+
+        td {
+            padding: 20px 24px;
+            font-size: 14px;
+            color: #334155;
+            font-weight: 500;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 25px;
+            font-size: 12px;
+            font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
-        td {
-            padding: 12px;
-            border-top: 1px solid #F3F4F6;
-            color: #1F2937;
+        .badge-blue { background: #dbeafe; color: #1e3a8a; }
+        .badge-green { background: #d1fae5; color: #064e3b; }
+        .badge-orange { background: #fed7aa; color: #7c2d12; }
+        .badge-red { background: #fee2e2; color: #7f1d1d; }
+        .badge-purple { background: #ede9fe; color: #4c1d95; }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .status-online {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            color: #064e3b;
+        }
+
+        .status-online::before {
+            content: '●';
+            animation: pulse 2s infinite;
+            color: #10b981;
             font-size: 14px;
         }
 
-        tr:hover {
-            background: #F9FAFB;
+        .status-offline {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            color: #7f1d1d;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
+        .status-paused {
+            background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+            color: #7c2d12;
         }
 
-        .badge-success {
-            background: #D1FAE5;
-            color: #065F46;
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
         }
 
-        .badge-warning {
-            background: #FEF3C7;
-            color: #92400E;
-        }
-
-        .badge-info {
-            background: #DBEAFE;
-            color: #1E40AF;
-        }
-
+        /* Links */
         .user-link {
-            color: #3B82F6;
+            color: #3b82f6;
             text-decoration: none;
-            font-weight: 600;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
         }
 
         .user-link:hover {
-            text-decoration: underline;
+            color: #2563eb;
+            transform: translateX(3px);
         }
 
-        .location-coords {
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            color: #6B7280;
+        .user-link i {
+            font-size: 16px;
         }
 
+        /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 40px;
-            color: #9CA3AF;
+            padding: 80px 20px;
         }
 
-        .empty-state svg {
-            width: 64px;
-            height: 64px;
-            margin-bottom: 16px;
+        .empty-state i {
+            font-size: 80px;
+            color: #cbd5e1;
+            margin-bottom: 20px;
             opacity: 0.5;
         }
 
-        .admin-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 12px 24px;
-            background: #3B82F6;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
+        .empty-state p {
+            color: #94a3b8;
+            font-size: 18px;
             font-weight: 600;
-            transition: background 0.3s ease;
         }
 
-        .admin-link:hover {
-            background: #2563EB;
+        /* Coords */
+        .coords {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            background: #f1f5f9;
+            padding: 6px 12px;
+            border-radius: 8px;
+            color: #475569;
+            font-weight: 600;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            background: white;
+            padding: 20px 28px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 350px;
+            z-index: 10000;
+            animation: slideIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .toast.success {
+            border-left: 5px solid #10b981;
+        }
+
+        .toast.error {
+            border-left: 5px solid #ef4444;
+        }
+
+        .toast-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .toast.success .toast-icon {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            color: #10b981;
+        }
+
+        .toast.error .toast-icon {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            color: #ef4444;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: 4px;
+            font-size: 16px;
+        }
+
+        .toast-message {
+            font-size: 14px;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(500px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(500px);
+                opacity: 0;
+            }
+        }
+
+        /* Action buttons in table */
+        .action-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-sm {
+            padding: 8px 14px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        /* Search box */
+        .search-box {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 14px 20px 14px 50px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            font-size: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid #f1f5f9;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>🚀 Solvey Tracker Admin Dashboard</h1>
-            <p>İstifadəçi məlumatlarını və izləmə statistikalarını idarə edin</p>
-            <a href="/admin/" class="admin-link">Django Admin Paneline Get</a>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo">
+            <h2><i class="fas fa-map-marked-alt"></i> Solvey</h2>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a class="nav-link active" onclick="showSection('dashboard')">
+                    <i class="fas fa-home"></i>
+                    <span>Ana Səhifə</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="showSection('users')">
+                    <i class="fas fa-users"></i>
+                    <span>İstifadəçilər</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="showSection('routes')">
+                    <i class="fas fa-route"></i>
+                    <span>Marşrutlar</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="showSection('locations')">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>Məkan Nöqtələri</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="showSection('visits')">
+                    <i class="fas fa-hospital"></i>
+                    <span>Ziyarətlər</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="showSection('notifications')">
+                    <i class="fas fa-bell"></i>
+                    <span>Bildirimlər</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="showSection('map')">
+                    <i class="fas fa-map"></i>
+                    <span>Canlı Xəritə</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Dashboard Section -->
+        <div id="dashboard" class="section active">
+            <div class="top-bar">
+                <h1><i class="fas fa-chart-line"></i> Dashboard</h1>
+                <div class="top-bar-actions">
+                    <button class="btn" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i>
+                        Yenilə
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card blue">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">İstifadəçilər</div>
+                            <div class="stat-value">{{ total_users }}</div>
+                            <div class="stat-subtitle">Qeydiyyatlı</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card green">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">Aktiv</div>
+                            <div class="stat-value">{{ active_users }}</div>
+                            <div class="stat-subtitle">Hal-hazırda online</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="fas fa-user-check"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card orange">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">Marşrutlar</div>
+                            <div class="stat-value">{{ total_routes }}</div>
+                            <div class="stat-subtitle">Ümumi</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="fas fa-route"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card red">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">Aktiv Marşrut</div>
+                            <div class="stat-value">{{ active_routes }}</div>
+                            <div class="stat-subtitle">Davam edir</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="fas fa-play-circle"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card purple">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">Nöqtələr</div>
+                            <div class="stat-value">{{ total_locations }}</div>
+                            <div class="stat-subtitle">Məkan qeydi</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card pink">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">Son 24 Saat</div>
+                            <div class="stat-value">{{ routes_last_24h }}</div>
+                            <div class="stat-subtitle">{{ locations_last_24h }} nöqtə</div>
+                        </div>
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Overview -->
+            <div class="content-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-users"></i> Son İstifadəçilər</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if users %}
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>İstifadəçi</th>
+                                        <th>Email</th>
+                                        <th>Marşrut</th>
+                                        <th>Aktivlik</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in users|slice:":5" %}
+                                    <tr>
+                                        <td>
+                                            <strong style="color: #1e293b;">
+                                                <i class="fas fa-user-circle" style="color: #3b82f6;"></i>
+                                                {{ user.username }}
+                                            </strong>
+                                        </td>
+                                        <td>{{ user.email|default:"-" }}</td>
+                                        <td><span class="badge badge-blue">{{ user.route_count|default:0 }}</span></td>
+                                        <td>
+                                            {% if user.last_activity %}
+                                                {{ user.last_activity|date:"d.m.Y H:i" }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-users"></i>
+                            <p>İstifadəçi yoxdur</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-paper-plane"></i> Bildirim Göndər</h3>
+                    </div>
+                    <div class="card-body">
+                        <form onsubmit="sendNotification(event)">
+                            <div class="form-group">
+                                <label class="form-label">İstifadəçi</label>
+                                <select id="notif-user" class="form-control" required>
+                                    <option value="">Seçin...</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.id }}">{{ user.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Növ</label>
+                                <select id="notif-type" class="form-control" required>
+                                    <option value="message">💬 Mesaj</option>
+                                    <option value="info">ℹ️ Məlumat</option>
+                                    <option value="warning">⚠️ Xəbərdarlıq</option>
+                                    <option value="error">❌ Xəta</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Başlıq</label>
+                                <input type="text" id="notif-title" class="form-control" placeholder="Başlıq..." required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Mesaj</label>
+                                <textarea id="notif-message" class="form-control" placeholder="Mesaj..." required></textarea>
+                            </div>
+
+                            <button type="submit" class="btn btn-success" style="width: 100%;">
+                                <i class="fas fa-paper-plane"></i>
+                                Göndər
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Statistics -->
-        <div class="stats-grid">
-            <div class="stat-card primary">
-                <h3>Ümumi İstifadəçilər</h3>
-                <div class="value">{{ total_users }}</div>
-                <div class="subtitle">Qeydiyyatdan keçmiş istifadəçilər</div>
+        <!-- Users Section -->
+        <div id="users" class="section">
+            <div class="top-bar">
+                <h1><i class="fas fa-users"></i> İstifadəçilər</h1>
+                <div class="top-bar-actions">
+                    <button class="btn" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i>
+                        Yenilə
+                    </button>
+                </div>
             </div>
 
-            <div class="stat-card success">
-                <h3>Aktiv İstifadəçilər</h3>
-                <div class="value">{{ active_users }}</div>
-                <div class="subtitle">Hal-hazırda izləmə aparanlar</div>
-            </div>
-
-            <div class="stat-card warning">
-                <h3>Ümumi Marşrutlar</h3>
-                <div class="value">{{ total_routes }}</div>
-                <div class="subtitle">Bütün zamanlar üçün</div>
-            </div>
-
-            <div class="stat-card danger">
-                <h3>Aktiv Marşrutlar</h3>
-                <div class="value">{{ active_routes }}</div>
-                <div class="subtitle">Hal-hazırda davam edən</div>
-            </div>
-
-            <div class="stat-card primary">
-                <h3>Ümumi Nöqtələr</h3>
-                <div class="value">{{ total_locations }}</div>
-                <div class="subtitle">Bütün məkan nöqtələri</div>
-            </div>
-
-            <div class="stat-card success">
-                <h3>Son 24 Saat</h3>
-                <div class="value">{{ routes_last_24h }}</div>
-                <div class="subtitle">{{ locations_last_24h }} nöqtə qeydə alınıb</div>
-            </div>
-        </div>
-
-        <!-- Content Grid -->
-        <div class="content-grid">
-            <!-- Users Table -->
             <div class="card">
                 <div class="card-header">
-                    <h2>👥 İstifadəçilər</h2>
-                    <a href="/admin/auth/user/">Hamısını Gör →</a>
+                    <h3><i class="fas fa-users"></i> Bütün İstifadəçilər</h3>
                 </div>
-                {% if users %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>İstifadəçi Adı</th>
-                            <th>Email</th>
-                            <th>Marşrut</th>
-                            <th>Nöqtə</th>
-                            <th>Son Aktivlik</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for user in users %}
-                        <tr>
-                            <td>
-                                <a href="/admin/auth/user/{{ user.id }}/change/" class="user-link">
-                                    {{ user.username }}
-                                </a>
-                            </td>
-                            <td>{{ user.email|default:"—" }}</td>
-                            <td><span class="badge badge-info">{{ user.route_count }}</span></td>
-                            <td><span class="badge badge-info">{{ user.location_count }}</span></td>
-                            <td>
-                                {% if user.last_activity %}
-                                    {{ user.last_activity|date:"d.m.Y H:i" }}
-                                {% else %}
-                                    <span style="color: #9CA3AF;">—</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="empty-state">
-                    <p>Hələ istifadəçi yoxdur</p>
-                </div>
-                {% endif %}
-            </div>
+                <div class="card-body">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="user-search" placeholder="İstifadəçi axtar..." onkeyup="searchTable('users-table', 'user-search')">
+                    </div>
 
-            <!-- Active Routes -->
-            <div class="card">
-                <div class="card-header">
-                    <h2>📍 Aktiv Marşrutlar</h2>
-                    <a href="/admin/tracking/route/">Hamısını Gör →</a>
+                    {% if users %}
+                    <div class="table-wrapper">
+                        <table id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>İstifadəçi</th>
+                                    <th>Email</th>
+                                    <th>Marşrut</th>
+                                    <th>Nöqtə</th>
+                                    <th>Son Aktivlik</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr>
+                                    <td><strong>#{{ user.id }}</strong></td>
+                                    <td>
+                                        <strong style="color: #1e293b;">
+                                            <i class="fas fa-user-circle" style="color: #3b82f6;"></i>
+                                            {{ user.username }}
+                                        </strong>
+                                    </td>
+                                    <td>{{ user.email|default:"-" }}</td>
+                                    <td><span class="badge badge-blue">{{ user.route_count|default:0 }}</span></td>
+                                    <td><span class="badge badge-green">{{ user.location_count|default:0 }}</span></td>
+                                    <td>
+                                        {% if user.last_activity %}
+                                            {{ user.last_activity|date:"d.m.Y H:i" }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-users"></i>
+                        <p>İstifadəçi yoxdur</p>
+                    </div>
+                    {% endif %}
                 </div>
-                {% if active_routes_list %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>İstifadəçi</th>
-                            <th>Başlama</th>
-                            <th>Nöqtə Sayı</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for route in active_routes_list %}
-                        <tr>
-                            <td>
-                                <a href="/admin/auth/user/{{ route.user.id }}/change/" class="user-link">
-                                    {{ route.user.username }}
-                                </a>
-                            </td>
-                            <td>{{ route.start_time|date:"d.m.Y H:i" }}</td>
-                            <td><span class="badge badge-info">{{ route.points.count }}</span></td>
-                            <td><span class="badge badge-success">Aktiv</span></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="empty-state">
-                    <p>Aktiv marşrut yoxdur</p>
-                </div>
-                {% endif %}
             </div>
         </div>
 
-        <!-- Recent Locations -->
-        <div class="card">
-            <div class="card-header">
-                <h2>🗺️ Son Məkan Nöqtələri</h2>
-                <a href="/admin/tracking/locationpoint/">Hamısını Gör →</a>
+        <!-- Routes Section -->
+        <div id="routes" class="section">
+            <div class="top-bar">
+                <h1><i class="fas fa-route"></i> Marşrutlar</h1>
+                <div class="top-bar-actions">
+                    <button class="btn" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i>
+                        Yenilə
+                    </button>
+                </div>
             </div>
-            {% if recent_locations %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>İstifadəçi</th>
-                        <th>Koordinatlar</th>
-                        <th>Vaxt</th>
-                        <th>Marşrut</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for location in recent_locations %}
-                    <tr>
-                        <td>
-                            <a href="/admin/auth/user/{{ location.route.user.id }}/change/" class="user-link">
-                                {{ location.route.user.username }}
-                            </a>
-                        </td>
-                        <td>
-                            <span class="location-coords">
-                                {{ location.latitude }}, {{ location.longitude }}
-                            </span>
-                        </td>
-                        <td>{{ location.timestamp|date:"d.m.Y H:i:s" }}</td>
-                        <td>
-                            <a href="/admin/tracking/route/{{ location.route.id }}/change/" class="user-link">
-                                #{{ location.route.id }}
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <div class="empty-state">
-                <p>Hələ məkan nöqtəsi yoxdur</p>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-route"></i> Aktiv Marşrutlar</h3>
+                </div>
+                <div class="card-body">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="route-search" placeholder="Marşrut axtar..." onkeyup="searchTable('routes-table', 'route-search')">
+                    </div>
+
+                    {% if active_routes_list %}
+                    <div class="table-wrapper">
+                        <table id="routes-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>İstifadəçi</th>
+                                    <th>Başlama</th>
+                                    <th>Nöqtə</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for route in active_routes_list %}
+                                <tr>
+                                    <td><strong>#{{ route.id }}</strong></td>
+                                    <td>
+                                        <strong style="color: #1e293b;">
+                                            <i class="fas fa-user-circle" style="color: #3b82f6;"></i>
+                                            {{ route.user.username }}
+                                        </strong>
+                                    </td>
+                                    <td>{{ route.start_time|date:"d.m.Y H:i" }}</td>
+                                    <td><span class="badge badge-blue">{{ route.points.count }}</span></td>
+                                    <td>
+                                        {% if route.is_paused %}
+                                            <span class="status-badge status-paused">⏸️ Duraklatılmış</span>
+                                        {% else %}
+                                            <span class="status-badge status-online">▶️ Aktiv</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-route"></i>
+                        <p>Aktiv marşrut yoxdur</p>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-            {% endif %}
+        </div>
+
+        <!-- Locations Section -->
+        <div id="locations" class="section">
+            <div class="top-bar">
+                <h1><i class="fas fa-map-marker-alt"></i> Məkan Nöqtələri</h1>
+                <div class="top-bar-actions">
+                    <button class="btn" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i>
+                        Yenilə
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-map-marker-alt"></i> Son Məkan Nöqtələri</h3>
+                </div>
+                <div class="card-body">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="location-search" placeholder="Məkan axtar..." onkeyup="searchTable('locations-table', 'location-search')">
+                    </div>
+
+                    {% if recent_locations %}
+                    <div class="table-wrapper">
+                        <table id="locations-table">
+                            <thead>
+                                <tr>
+                                    <th>İstifadəçi</th>
+                                    <th>Koordinatlar</th>
+                                    <th>Vaxt</th>
+                                    <th>Status</th>
+                                    <th>Marşrut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for location in recent_locations %}
+                                <tr>
+                                    <td>
+                                        <strong style="color: #1e293b;">
+                                            <i class="fas fa-user-circle" style="color: #3b82f6;"></i>
+                                            {{ location.route.user.username }}
+                                        </strong>
+                                    </td>
+                                    <td><span class="coords">{{ location.latitude }}, {{ location.longitude }}</span></td>
+                                    <td>{{ location.timestamp|date:"d.m.Y H:i:s" }}</td>
+                                    <td>
+                                        {% if location.is_online %}
+                                            <span class="status-badge status-online">Online</span>
+                                        {% else %}
+                                            <span class="status-badge status-offline">Offline</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="badge badge-blue">#{{ location.route.id }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <p>Məkan nöqtəsi yoxdur</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Visits Section -->
+        <div id="visits" class="section">
+            <div class="top-bar">
+                <h1><i class="fas fa-hospital"></i> Xəstəxana Ziyarətləri</h1>
+                <div class="top-bar-actions">
+                    <button class="btn" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i>
+                        Yenilə
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-hospital"></i> Bütün Ziyarətlər</h3>
+                </div>
+                <div class="card-body">
+                    <div class="empty-state">
+                        <i class="fas fa-hospital"></i>
+                        <p>Ziyarət məlumatı əlavə ediləcək</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications Section -->
+        <div id="notifications" class="section">
+            <div class="top-bar">
+                <h1><i class="fas fa-bell"></i> Bildirimlər</h1>
+                <div class="top-bar-actions">
+                    <button class="btn" onclick="showSection('dashboard')">
+                        <i class="fas fa-paper-plane"></i>
+                        Bildirim Göndər
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-bell"></i> Göndərilmiş Bildirimlər</h3>
+                </div>
+                <div class="card-body">
+                    <div class="empty-state">
+                        <i class="fas fa-bell"></i>
+                        <p>Bildirim tarixçəsi göstəriləcək</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Section -->
+        <div id="map-section" class="section">
+            <div class="top-bar">
+                <h1><i class="fas fa-map"></i> Canlı Xəritə</h1>
+                <div class="top-bar-actions">
+                    <button class="btn" onclick="loadMapData()">
+                        <i class="fas fa-sync-alt"></i>
+                        Yenilə
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-map"></i> Canlı Konum İzləmə</h3>
+                </div>
+                <div class="card-body">
+                    <div id="map"></div>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        let map;
+        let markers = {};
+        let polylines = {};
+        let updateInterval;
+        let mapInitialized = false;
+
+        // Show section
+        function showSection(sectionId) {
+            // Update nav
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.closest('.nav-link').classList.add('active');
+
+            // Update sections
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            if (sectionId === 'map') {
+                document.getElementById('map-section').classList.add('active');
+                if (!mapInitialized) {
+                    initMap();
+                    mapInitialized = true;
+                }
+            } else {
+                document.getElementById(sectionId).classList.add('active');
+            }
+        }
+
+        // Initialize map
+        function initMap() {
+            if (!map) {
+                map = L.map('map').setView([40.4093, 49.8671], 12);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap',
+                    maxZoom: 19
+                }).addTo(map);
+
+                loadMapData();
+                updateInterval = setInterval(loadMapData, 10000);
+            }
+        }
+
+        // Load map data
+        async function loadMapData() {
+            if (!map) return;
+
+            try {
+                const response = await fetch('/api/movqe-son-json/');
+                const data = await response.json();
+                
+                // Clear existing
+                Object.values(markers).forEach(m => map.removeLayer(m));
+                Object.values(polylines).forEach(p => map.removeLayer(p));
+                markers = {};
+                polylines = {};
+
+                const features = data.features || [];
+                
+                for (const feature of features) {
+                    const userId = feature.id;
+                    const username = feature.ad || 'Naməlum';
+                    const lat = feature.lat;
+                    const lng = feature.lng;
+
+                    try {
+                        const routeResponse = await fetch(`/api/routes/?user=${userId}`);
+                        const routeData = await routeResponse.json();
+                        const activeRoute = Array.isArray(routeData) 
+                            ? routeData.find(r => !r.end_time)
+                            : routeData.results?.find(r => !r.end_time);
+
+                        if (activeRoute && activeRoute.points && activeRoute.points.length > 1) {
+                            const points = activeRoute.points.map(p => [
+                                parseFloat(p.latitude),
+                                parseFloat(p.longitude)
+                            ]);
+                            
+                            const polyline = L.polyline(points, {
+                                color: getColorForUser(userId),
+                                weight: 4,
+                                opacity: 0.7
+                            }).addTo(map);
+                            
+                            polylines[userId] = polyline;
+
+                            const lastPoint = points[points.length - 1];
+                            const marker = L.marker(lastPoint, {
+                                icon: L.divIcon({
+                                    className: 'custom-marker',
+                                    html: `<div style="
+                                        background: ${getColorForUser(userId)};
+                                        width: 24px;
+                                        height: 24px;
+                                        border-radius: 50%;
+                                        border: 4px solid white;
+                                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                                    "></div>`,
+                                    iconSize: [24, 24]
+                                })
+                            }).addTo(map);
+
+                            marker.bindPopup(`
+                                <div style="padding: 10px; min-width: 200px;">
+                                    <h4 style="margin: 0 0 10px; color: #1e293b; font-size: 16px;">
+                                        <i class="fas fa-user-circle" style="color: #3b82f6;"></i>
+                                        ${username}
+                                    </h4>
+                                    <p style="margin: 5px 0; font-size: 13px;">
+                                        <strong>Nöqtə:</strong> ${points.length}
+                                    </p>
+                                    <p style="margin: 5px 0; font-size: 12px; color: #64748b; font-family: monospace;">
+                                        ${lastPoint[0].toFixed(6)}, ${lastPoint[1].toFixed(6)}
+                                    </p>
+                                </div>
+                            `);
+                            
+                            markers[userId] = marker;
+                        }
+                    } catch (err) {
+                        console.error('Route error:', err);
+                    }
+                }
+
+                if (Object.keys(markers).length > 0) {
+                    const group = new L.featureGroup(Object.values(markers));
+                    map.fitBounds(group.getBounds().pad(0.1));
+                }
+            } catch (error) {
+                console.error('Map error:', error);
+            }
+        }
+
+        // Get color for user
+        function getColorForUser(userId) {
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+            return colors[userId % colors.length];
+        }
+
+        // Send notification
+        async function sendNotification(event) {
+            event.preventDefault();
+            
+            const userId = document.getElementById('notif-user').value;
+            const type = document.getElementById('notif-type').value;
+            const title = document.getElementById('notif-title').value;
+            const message = document.getElementById('notif-message').value;
+
+            try {
+                const response = await fetch('/api/notifications/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        notification_type: type,
+                        title: title,
+                        message: message
+                    })
+                });
+
+                if (response.ok) {
+                    showToast('Uğurlu!', 'Bildirim göndərildi', 'success');
+                    event.target.reset();
+                } else {
+                    const error = await response.json();
+                    showToast('Xəta!', error.detail || 'Xəta baş verdi', 'error');
+                }
+            } catch (error) {
+                showToast('Xəta!', 'Bildirim göndərilə bilmədi', 'error');
+            }
+        }
+
+        // Show toast
+        function showToast(title, message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <div class="toast-icon">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                </div>
+                <div class="toast-content">
+                    <div class="toast-title">${title}</div>
+                    <div class="toast-message">${message}</div>
+                </div>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.4s ease';
+                setTimeout(() => toast.remove(), 400);
+            }, 3000);
+        }
+
+        // Get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Search table
+        function searchTable(tableId, searchId) {
+            const input = document.getElementById(searchId);
+            const filter = input.value.toUpperCase();
+            const table = document.getElementById(tableId);
+            const tr = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < tr.length; i++) {
+                const td = tr[i].getElementsByTagName('td');
+                let found = false;
+                
+                for (let j = 0; j < td.length; j++) {
+                    if (td[j]) {
+                        const txtValue = td[j].textContent || td[j].innerText;
+                        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                
+                tr[i].style.display = found ? '' : 'none';
+            }
+        }
+
+        // Refresh data
+        function refreshData() {
+            location.reload();
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Dashboard loaded');
+        });
+    </script>
 </body>
 </html>
-

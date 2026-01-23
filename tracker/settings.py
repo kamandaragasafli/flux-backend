@@ -12,7 +12,8 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me-in-production")
 
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+# Server IP ve localhost için allowed hosts (Expo Go için)
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "206.189.53.174,localhost,127.0.0.1").split(",")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -136,6 +137,10 @@ SIMPLE_JWT = {
 }
 
 # CORS ayarları
+# Expo Go için tüm origin'lere izin ver (Expo Go farklı IP'lerden bağlanabilir)
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "true").lower() == "true"
+
+# Eğer CORS_ALLOW_ALL_ORIGINS false ise, spesifik origin'ler ekleyin
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8081",
     "http://localhost:8082",
@@ -143,10 +148,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8081",
     "http://127.0.0.1:8082",
     "http://127.0.0.1:19006",
+    "exp://localhost:8081",  # Expo Go
+    "exp://192.168.1.100:8081",  # Expo Go local network
 ]
-
-# Development için tüm origin'lere izin ver (production'da kaldır!)
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "true").lower() == "true"
 
 CORS_ALLOW_CREDENTIALS = True
 

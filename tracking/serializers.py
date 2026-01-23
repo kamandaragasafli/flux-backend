@@ -1,8 +1,28 @@
 from django.utils import timezone
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 
-from .models import Route, LocationPoint
+from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = UserProfile
+        fields = ['id', 'username', 'regions', 'cities', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def validate_regions(self, value):
+        if len(value) > 3:
+            raise serializers.ValidationError("Maksimum 3 bölge seçebilirsiniz.")
+        return value
+    
+    def validate_cities(self, value):
+        if len(value) > 3:
+            raise serializers.ValidationError("Maksimum 3 şehir seçebilirsiniz.")
+        return value
 
 
 class LoginSerializer(serializers.Serializer):
@@ -62,6 +82,10 @@ class CreateLocationSerializer(serializers.Serializer):
     latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
     longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
     timestamp = serializers.DateTimeField()
+    accuracy = serializers.FloatField(required=False)
+    speed = serializers.FloatField(required=False)
+    battery_level = serializers.IntegerField(required=False)
+    is_online = serializers.BooleanField(required=False, default=True)
 
     def validate(self, attrs):
         user = self.context["request"].user
@@ -78,15 +102,111 @@ class CreateLocationSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data):
+        from django.utils import timezone
         route = validated_data["route"]
         latitude = validated_data["latitude"]
         longitude = validated_data["longitude"]
         timestamp = validated_data["timestamp"]
+        accuracy = validated_data.get("accuracy")
+        speed = validated_data.get("speed")
+        battery_level = validated_data.get("battery_level")
+        is_online = validated_data.get("is_online", True)
+        
+        # Route'un son konum zamanını ve ping'ini güncelle
+        route.last_location_time = timestamp
+        route.last_ping = timezone.now()
+        route.is_online = is_online
+        route.save(update_fields=['last_location_time', 'last_ping', 'is_online'])
+        
         return LocationPoint.objects.create(
             route=route,
             latitude=latitude,
             longitude=longitude,
             timestamp=timestamp,
+            accuracy=accuracy,
+            speed=speed,
+            battery_level=battery_level,
+            is_online=is_online,
         )
 
 
+class VisitScheduleSerializer(serializers.ModelSerializer):
+    day_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = VisitSchedule
+        fields = [
+            'id',
+            'hospital_name',
+            'hospital_latitude',
+            'hospital_longitude',
+            'doctor_name',
+            'day_of_week',
+            'day_name',
+            'start_time',
+            'end_time',
+            'notes',
+            'is_active',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_day_name(self, obj):
+        return dict(VisitSchedule.DAY_CHOICES).get(obj.day_of_week, '')
+    
+    def create(self, validated_data):
+        user = self.context['request'].user
+        return VisitSchedule.objects.create(user=user, **validated_data)
+
+
+class HospitalVisitSerializer(serializers.ModelSerializer):
+    duration_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = HospitalVisit
+        fields = [
+            'id',
+            'hospital_name',
+            'hospital_latitude',
+            'hospital_longitude',
+            'doctor_name',
+            'visit_date',
+            'check_in_time',
+            'check_out_time',
+            'duration_minutes',
+            'duration_display',
+            'notes',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'duration_minutes']
+    
+    def get_duration_display(self, obj):
+        if obj.duration_minutes:
+            hours = obj.duration_minutes // 60
+            minutes = obj.duration_minutes % 60
+            if hours > 0:
+                return f"{hours} saat {minutes} dəqiqə"
+            return f"{minutes} dəqiqə"
+        return "-"
+    
+    def create(self, validated_data):
+        user = self.context['request'].user
+        visit = HospitalVisit.objects.create(user=user, **validated_data)
+        visit.calculate_duration()
+        visit.save()
+        return visit
+    
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.calculate_duration()
+        instance.save()
+        return instance
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'
+        read_only_fields = ('user', 'created_at')
