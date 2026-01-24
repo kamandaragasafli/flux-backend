@@ -4,6 +4,7 @@ from . import views
 from . import views_external
 
 from .views import (
+    RegisterView,
     LoginView,
     StartRouteView,
     StopRouteView,
@@ -28,8 +29,11 @@ router.register(r'schedules', VisitScheduleViewSet, basename='schedule')
 router.register(r'visits', HospitalVisitViewSet, basename='visit')
 
 urlpatterns = [
+    path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/login/", LoginView.as_view(), name="login"),
     path("auth/user/", CurrentUserView.as_view(), name="current-user"),
+    path("users/register/", RegisterView.as_view(), name="register-users"),  # Mobile app compatibility
+    path("users/login/", LoginView.as_view(), name="login-users"),  # Mobile app compatibility
     path("movqe-son-json/", LastLocationsView.as_view(), name="last-locations"),
     path("routes/", RoutesListView.as_view(), name="routes-list"),
     path("routes/start/", StartRouteView.as_view(), name="route-start"),

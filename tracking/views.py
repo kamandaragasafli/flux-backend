@@ -13,6 +13,7 @@ import os
 
 from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification
 from .serializers import (
+    RegisterSerializer,
     LoginSerializer,
     RouteSerializer,
     StartRouteSerializer,
@@ -27,6 +28,29 @@ from .serializers import (
 # SSL uyarılarını bastır (development için)
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+class RegisterView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                },
+                "token": str(refresh.access_token),
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]

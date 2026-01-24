@@ -25,6 +25,64 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return value
 
 
+class RegisterSerializer(serializers.Serializer):
+    username = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, min_length=6)
+    password2 = serializers.CharField(write_only=True, min_length=6)
+
+    def validate(self, attrs):
+        username = attrs.get("username")
+        email = attrs.get("email")
+        password = attrs.get("password")
+        password2 = attrs.get("password2")
+
+        # Ya username ya da email olmalıdır
+        if not username and not email:
+            raise serializers.ValidationError("Username və ya email tələb olunur.")
+        
+        # Şifrələr eyni olmalıdır
+        if password != password2:
+            raise serializers.ValidationError("Şifrələr eyni olmalıdır.")
+        
+        # Username və ya email artıq mövcuddursa
+        if username and User.objects.filter(username=username).exists():
+            raise serializers.ValidationError("Bu istifadəçi adı artıq mövcuddur.")
+        
+        if email and User.objects.filter(email=email).exists():
+            raise serializers.ValidationError("Bu email artıq mövcuddur.")
+        
+        # Username yoxdursa, email-dən yarat
+        if not username and email:
+            username = email.split('@')[0]
+            # Username unikal olmalıdır
+            counter = 1
+            original_username = username
+            while User.objects.filter(username=username).exists():
+                username = f"{original_username}{counter}"
+                counter += 1
+        
+        attrs["username"] = username
+        attrs["password"] = password
+        return attrs
+
+    def create(self, validated_data):
+        username = validated_data["username"]
+        email = validated_data.get("email", "")
+        password = validated_data["password"]
+        
+        user = User.objects.create_user(
+            username=username,
+            email=email if email else f"{username}@example.com",
+            password=password
+        )
+        
+        # UserProfile yarat
+        UserProfile.objects.get_or_create(user=user)
+        
+        return user
+
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
