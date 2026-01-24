@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from . import views_external
 
 from .views import (
     LoginView,
@@ -18,6 +19,7 @@ from .views import (
     NotificationListView,
     NotificationCreateView,
     NotificationMarkReadView,
+    NotificationDeleteView,
 )
 
 # Router for ViewSets
@@ -39,7 +41,18 @@ urlpatterns = [
     path("notifications/", NotificationListView.as_view(), name="notification-list"),
     path("notifications/create/", NotificationCreateView.as_view(), name="notification-create"),
     path("notifications/<int:pk>/mark-read/", NotificationMarkReadView.as_view(), name="notification-mark-read"),
+    path("notifications/<int:pk>/delete/", NotificationDeleteView.as_view(), name="notification-delete"),
     path("dashboard/", views.admin_dashboard, name="dashboard"),
+    # External data endpoints (Solvey Pharma)
+    path("external/users/", views_external.external_users, name="external-users"),
+    path("external/orders/", views_external.external_orders, name="external-orders"),
+    path("external/doctors/", views_external.external_doctors, name="external-doctors"),
+    path("external/regions-areas/", views_external.external_regions_areas, name="external-regions-areas"),
+    path("external/hospitals/", views_external.external_hospitals, name="external-hospitals"),
+    path("external/cities/", views_external.external_cities, name="external-cities"),
+    path("external/tables/", views_external.external_tables, name="external-tables"),
+    path("external/table-info/", views_external.external_table_info, name="external-table-info"),
+    path("external/custom/", views_external.external_custom_data, name="external-custom"),
     # ViewSet routes
     path("", include(router.urls)),
 ]

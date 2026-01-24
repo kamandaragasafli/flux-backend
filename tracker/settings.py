@@ -89,6 +89,32 @@ else:
         }
     }
 
+# External Database Configuration (İkinci database - isteğe bağlı)
+# Eğer external database kullanmak istiyorsanız, .env dosyasına ekleyin:
+# USE_EXTERNAL_DB=true
+# EXTERNAL_DB_NAME=external_db_name
+# EXTERNAL_DB_USER=external_user
+# EXTERNAL_DB_PASSWORD=external_password
+# EXTERNAL_DB_HOST=external_host
+# EXTERNAL_DB_PORT=5432
+USE_EXTERNAL_DB = os.getenv("USE_EXTERNAL_DB", "false").lower() == "true"
+
+if USE_EXTERNAL_DB:
+    DATABASES["external"] = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("EXTERNAL_DB_NAME", ""),
+        "USER": os.getenv("EXTERNAL_DB_USER", ""),
+        "PASSWORD": os.getenv("EXTERNAL_DB_PASSWORD", ""),
+        "HOST": os.getenv("EXTERNAL_DB_HOST", ""),
+        "PORT": os.getenv("EXTERNAL_DB_PORT", "5432"),
+        "OPTIONS": {
+            "connect_timeout": 10,
+        },
+    }
+
+# Database Router (hangi model hangi database'i kullanacak)
+DATABASE_ROUTERS = ['tracking.db_router.ExternalDatabaseRouter']
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -104,7 +130,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "az"
 
 TIME_ZONE = "UTC"
 

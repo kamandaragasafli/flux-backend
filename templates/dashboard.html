@@ -14,8 +14,26 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Font Awesome - Primary CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    <!-- Font Awesome - Fallback CDN -->
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.5.1/css/all.css" crossorigin="anonymous" />
+    
+    <style>
+        /* Ensure icons are displayed properly */
+        .fas, .far, .fab, .fa {
+            font-family: 'Font Awesome 6 Free', 'Font Awesome 6 Brands' !important;
+            font-weight: 900;
+            -moz-osx-font-smoothing: grayscale;
+            -webkit-font-smoothing: antialiased;
+            display: inline-block;
+            font-style: normal;
+            font-variant: normal;
+            text-rendering: auto;
+            line-height: 1;
+        }
+    </style>
     
     <style>
         * {
@@ -537,6 +555,85 @@
             border-radius: 16px;
             overflow: hidden;
             background: rgba(30, 41, 75, 0.3);
+            position: relative;
+        }
+
+        /* Map Legend */
+        .map-legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(30, 41, 75, 0.95);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 15px;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            min-width: 200px;
+        }
+
+        .map-legend h4 {
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+        }
+
+        .legend-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .legend-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .legend-icon.active {
+            background: #22c55e;
+            animation: pulse 2s infinite;
+        }
+
+        .legend-icon.paused {
+            background: #fbbf24;
+        }
+
+        .legend-icon.inactive {
+            background: #6b7280;
+        }
+
+        .legend-icon.offline {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 2px 4px rgba(0,0,0,0.2), 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            50% { box-shadow: 0 2px 4px rgba(0,0,0,0.2), 0 0 0 8px rgba(34, 197, 94, 0); }
+        }
+
+        .legend-stats {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        .legend-stats div {
+            margin-bottom: 4px;
         }
 
         /* Table Styles */
@@ -974,8 +1071,33 @@
                     </div>
                 </div>
 
-                <div class="section-card" style="padding: 0;">
+                <div class="section-card" style="padding: 0; position: relative;">
                     <div id="map" style="height: 700px; border-radius: 16px;"></div>
+                    <!-- Map Legend -->
+                    <div class="map-legend">
+                        <h4><i class="fas fa-info-circle"></i> Legend</h4>
+                        <div class="legend-item">
+                            <div class="legend-icon active"></div>
+                            <span>Active Tracking</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon paused"></div>
+                            <span>Paused</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon offline"></div>
+                            <span>Offline</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon inactive"></div>
+                            <span>No Active Route</span>
+                        </div>
+                        <div class="legend-stats">
+                            <div><strong>Total Users:</strong> <span id="legend-total">-</span></div>
+                            <div><strong>Active Now:</strong> <span id="legend-active">-</span></div>
+                            <div><strong>Last Update:</strong> <span id="legend-update">-</span></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1097,11 +1219,72 @@
                     <div class="section-card">
                         <div class="section-header">
                             <div class="section-title">Recent Notifications</div>
+                            <button class="filter-btn" onclick="refreshNotifications()" title="Refresh">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
                         </div>
+                        {% if recent_notifications %}
+                        <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>USER</th>
+                                        <th>TYPE</th>
+                                        <th>TITLE</th>
+                                        <th>MESSAGE</th>
+                                        <th>DATE</th>
+                                        <th>STATUS</th>
+                                        <th>ACTIONS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="notificationsTableBody">
+                                    {% for notification in recent_notifications %}
+                                    <tr id="notification-row-{{ notification.id }}">
+                                        <td><strong>{{ notification.user.username }}</strong></td>
+                                        <td>
+                                            {% if notification.notification_type == 'message' %}
+                                            <span class="badge badge-info">💬 Message</span>
+                                            {% elif notification.notification_type == 'info' %}
+                                            <span class="badge badge-info">ℹ️ Info</span>
+                                            {% elif notification.notification_type == 'warning' %}
+                                            <span class="badge badge-warning">⚠️ Warning</span>
+                                            {% elif notification.notification_type == 'error' %}
+                                            <span class="badge badge-danger">❌ Error</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ notification.title }}</td>
+                                        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            {{ notification.message|truncatewords:10 }}
+                                        </td>
+                                        <td>{{ notification.created_at|date:"d.m.Y H:i" }}</td>
+                                        <td>
+                                            {% if notification.is_read %}
+                                            <span class="badge badge-success">Read</span>
+                                            {% else %}
+                                            <span class="badge badge-warning">Unread</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button 
+                                                class="icon-btn" 
+                                                onclick="deleteNotification({{ notification.id }})"
+                                                title="Delete"
+                                                style="width: 32px; height: 32px; padding: 0; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); color: #ef4444;"
+                                            >
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
                         <div class="empty-state">
                             <i class="fas fa-bell"></i>
-                            <p>Notification history will appear here</p>
+                            <p>No notifications found</p>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -1397,11 +1580,43 @@
         let polylines = {};
         let mapUpdateInterval = null;
 
-        function initMap() {
+        async function initMap() {
             if (!map) {
+                // Önce kullanıcı konumlarını yükle
+                let initialCenter = [40.4093, 49.8671]; // Varsayılan (Bakü)
+                let initialZoom = 12;
+                
+                try {
+                    const csrfToken = getCSRFToken();
+                    const response = await fetch('/api/movqe-son-json/', {
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-CSRFToken': csrfToken || ''
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        const features = data.features || [];
+                        
+                        // Kullanıcı konumları varsa, haritayı onlara göre merkezle
+                        if (features.length > 0) {
+                            const validLocations = features.filter(f => f.lat && f.lng);
+                            if (validLocations.length > 0) {
+                                // İlk kullanıcının konumunu merkez olarak kullan
+                                initialCenter = [validLocations[0].lat, validLocations[0].lng];
+                                initialZoom = 13;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.log('Initial location fetch failed, using default center');
+                }
+                
+                // Haritayı kullanıcı konumlarına göre başlat
                 map = L.map('map', {
-                    center: [40.4093, 49.8671],
-                    zoom: 12,
+                    center: initialCenter,
+                    zoom: initialZoom,
                     zoomControl: true
                 });
                 
@@ -1411,7 +1626,8 @@
                     subdomains: 'abcd'
                 }).addTo(map);
 
-                loadMapData();
+                // Kullanıcı konumlarını yükle ve haritayı güncelle
+                await loadMapData();
                 mapUpdateInterval = setInterval(loadMapData, 10000);
             }
         }
@@ -1445,12 +1661,15 @@
                 polylines = {};
 
                 const features = data.features || [];
+                let activeCount = 0;
                 
                 for (const feature of features) {
                     const userId = feature.id;
                     const username = feature.ad || 'Unknown';
                     const lat = feature.lat;
                     const lng = feature.lng;
+                    const status = feature.status || 'unknown';
+                    const isPaused = feature.is_paused || false;
 
                     try {
                         const csrfToken = getCSRFToken();
@@ -1472,79 +1691,179 @@
                             : routeData.results?.find(r => !r.end_time);
 
                         if (activeRoute && activeRoute.points && activeRoute.points.length > 0) {
+                            activeCount++;
                             const points = activeRoute.points.map(p => [
                                 parseFloat(p.latitude),
                                 parseFloat(p.longitude)
                             ]);
                             
+                            // Determine color based on status
+                            let markerColor;
+                            if (isPaused) {
+                                markerColor = '#fbbf24'; // Yellow for paused
+                            } else if (status === 'online') {
+                                markerColor = '#22c55e'; // Green for active online
+                            } else if (status === 'offline') {
+                                markerColor = '#ef4444'; // Red for offline
+                            } else {
+                                markerColor = '#6b7280'; // Gray for unknown
+                            }
+                            
                             if (points.length > 1) {
-                                const userColor = getColorForUser(userId);
                                 const polyline = L.polyline(points, {
-                                    color: userColor,
-                                    weight: 5,
-                                    opacity: 0.8
+                                    color: markerColor,
+                                    weight: 4,
+                                    opacity: 0.7,
+                                    dashArray: isPaused ? '10, 5' : null
                                 }).addTo(map);
                                 polylines[userId] = polyline;
                             }
 
                             const lastPoint = points[points.length - 1];
-                            const userColor = getColorForUser(userId);
+                            const firstPoint = points[0];
+                            
+                            // Format times
+                            const startTime = new Date(activeRoute.start_time).toLocaleString('az-AZ');
+                            const lastPointTime = activeRoute.points[activeRoute.points.length - 1]?.timestamp 
+                                ? new Date(activeRoute.points[activeRoute.points.length - 1].timestamp).toLocaleString('az-AZ')
+                                : 'N/A';
+                            
+                            // Calculate duration
+                            const startDate = new Date(activeRoute.start_time);
+                            const now = new Date();
+                            const durationMs = now - startDate;
+                            const durationHours = Math.floor(durationMs / 3600000);
+                            const durationMins = Math.floor((durationMs % 3600000) / 60000);
+                            
+                            // Status icon and text
+                            let statusIcon, statusText, statusColor;
+                            if (isPaused) {
+                                statusIcon = '⏸️';
+                                statusText = 'Paused';
+                                statusColor = '#fbbf24';
+                            } else if (status === 'online') {
+                                statusIcon = '✅';
+                                statusText = 'Active Online';
+                                statusColor = '#22c55e';
+                            } else if (status === 'offline') {
+                                statusIcon = '🔴';
+                                statusText = 'Offline';
+                                statusColor = '#ef4444';
+                            } else {
+                                statusIcon = '❓';
+                                statusText = 'Unknown';
+                                statusColor = '#6b7280';
+                            }
+                            
                             const marker = L.marker(lastPoint, {
                                 icon: L.divIcon({
                                     className: 'custom-marker',
                                     html: `<div style="
-                                        background: ${userColor};
-                                        width: 24px;
-                                        height: 24px;
+                                        background: ${markerColor};
+                                        width: 28px;
+                                        height: 28px;
                                         border-radius: 50%;
                                         border: 4px solid white;
                                         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                                        animation: ${!isPaused && status === 'online' ? 'pulse 2s infinite' : 'none'};
                                     "></div>`,
-                                    iconSize: [24, 24],
-                                    iconAnchor: [12, 12]
+                                    iconSize: [28, 28],
+                                    iconAnchor: [14, 14]
                                 })
                             }).addTo(map);
 
                             marker.bindPopup(`
-                                <div style="padding: 10px; min-width: 200px;">
-                                    <h4 style="margin: 0 0 10px; color: #1e293b; font-size: 16px;">
+                                <div style="padding: 15px; min-width: 280px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
+                                    <h4 style="margin: 0 0 12px; color: #1e293b; font-size: 16px; font-weight: 600; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
                                         <i class="fas fa-user-circle" style="color: #3b82f6;"></i>
                                         ${username}
                                     </h4>
-                                    <p style="margin: 5px 0; font-size: 13px;">
-                                        <strong>Points:</strong> ${points.length}
-                                    </p>
-                                    <p style="margin: 5px 0; font-size: 12px; color: #64748b; font-family: monospace;">
-                                        ${lastPoint[0].toFixed(6)}, ${lastPoint[1].toFixed(6)}
-                                    </p>
+                                    
+                                    <div style="margin-bottom: 10px;">
+                                        <span style="background: ${statusColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                                            ${statusIcon} ${statusText}
+                                        </span>
+                                    </div>
+                                    
+                                    <div style="background: #f8fafc; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                                        <div style="margin-bottom: 6px;">
+                                            <strong style="color: #475569; font-size: 12px;">📍 Route Info:</strong>
+                                        </div>
+                                        <div style="font-size: 12px; color: #64748b; line-height: 1.6;">
+                                            <div><strong>Points:</strong> ${points.length}</div>
+                                            <div><strong>Duration:</strong> ${durationHours}h ${durationMins}m</div>
+                                            <div><strong>Route ID:</strong> #${activeRoute.id}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="background: #f0f9ff; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                                        <div style="margin-bottom: 6px;">
+                                            <strong style="color: #475569; font-size: 12px;">⏰ Time Info:</strong>
+                                        </div>
+                                        <div style="font-size: 11px; color: #64748b; line-height: 1.6;">
+                                            <div><strong>Started:</strong> ${startTime}</div>
+                                            <div><strong>Last Update:</strong> ${lastPointTime}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="background: #fef3c7; border-radius: 8px; padding: 10px;">
+                                        <div style="margin-bottom: 6px;">
+                                            <strong style="color: #475569; font-size: 12px;">📌 Coordinates:</strong>
+                                        </div>
+                                        <div style="font-size: 11px; color: #64748b; font-family: monospace; line-height: 1.6;">
+                                            <div><strong>Current:</strong> ${lastPoint[0].toFixed(6)}, ${lastPoint[1].toFixed(6)}</div>
+                                            <div><strong>Start:</strong> ${firstPoint[0].toFixed(6)}, ${firstPoint[1].toFixed(6)}</div>
+                                        </div>
+                                    </div>
                                 </div>
                             `);
                             
                             markers[userId] = marker;
                         } else if (lat && lng) {
-                            const userColor = getColorForUser(userId);
+                            // User with no active route
+                            const markerColor = '#6b7280'; // Gray for inactive
                             const marker = L.marker([lat, lng], {
                                 icon: L.divIcon({
                                     className: 'custom-marker',
                                     html: `<div style="
-                                        background: ${userColor};
+                                        background: ${markerColor};
                                         width: 20px;
                                         height: 20px;
                                         border-radius: 50%;
                                         border: 3px solid white;
                                         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                                        opacity: 0.7;
                                     "></div>`,
                                     iconSize: [20, 20],
                                     iconAnchor: [10, 10]
                                 })
                             }).addTo(map);
-                            marker.bindPopup(`<strong>${username}</strong><br/>No active route`);
+                            
+                            marker.bindPopup(`
+                                <div style="padding: 12px; min-width: 200px;">
+                                    <h4 style="margin: 0 0 8px; color: #1e293b; font-size: 14px;">
+                                        <i class="fas fa-user-circle" style="color: #6b7280;"></i>
+                                        ${username}
+                                    </h4>
+                                    <span style="background: #6b7280; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;">
+                                        No Active Route
+                                    </span>
+                                    <p style="margin: 8px 0 0; font-size: 11px; color: #64748b; font-family: monospace;">
+                                        ${lat.toFixed(6)}, ${lng.toFixed(6)}
+                                    </p>
+                                </div>
+                            `);
                             markers[userId] = marker;
                         }
                     } catch (err) {
                         console.error('Route error:', err);
                     }
                 }
+
+                // Update legend stats
+                document.getElementById('legend-total').textContent = features.length;
+                document.getElementById('legend-active').textContent = activeCount;
+                document.getElementById('legend-update').textContent = new Date().toLocaleTimeString('az-AZ');
 
                 if (Object.keys(markers).length > 0) {
                     const group = new L.featureGroup(Object.values(markers));
@@ -1556,6 +1875,8 @@
         }
 
         function getColorForUser(userId) {
+            // This function is kept for backward compatibility but not used anymore
+            // Colors are now determined by status in loadMapData()
             const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
             return colors[userId % colors.length];
         }
@@ -1595,6 +1916,8 @@
                 if (response.ok) {
                     alert('✅ Notification sent successfully!');
                     event.target.reset();
+                    // Refresh notifications list
+                    refreshNotifications();
                 } else {
                     const error = await response.json();
                     alert('❌ Error: ' + (error.detail || 'Failed to send'));
@@ -1602,6 +1925,51 @@
             } catch (error) {
                 alert('❌ Error: Failed to send notification');
             }
+        }
+
+        // Delete Notification
+        async function deleteNotification(notificationId) {
+            if (!confirm('Bu bildirimi silmək istədiyinizə əminsiniz?')) {
+                return;
+            }
+
+            try {
+                const csrfToken = getCSRFToken();
+                const response = await fetch(`/api/notifications/${notificationId}/delete/`, {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                if (response.ok) {
+                    // Remove the row from table
+                    const row = document.getElementById(`notification-row-${notificationId}`);
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s';
+                        row.style.opacity = '0';
+                        setTimeout(() => {
+                            row.remove();
+                            // If no more notifications, show empty state
+                            const tbody = document.getElementById('notificationsTableBody');
+                            if (tbody && tbody.children.length === 0) {
+                                location.reload(); // Reload to show empty state
+                            }
+                        }, 300);
+                    }
+                } else {
+                    const error = await response.json();
+                    alert('❌ Error: ' + (error.detail || 'Failed to delete notification'));
+                }
+            } catch (error) {
+                alert('❌ Error: Failed to delete notification');
+            }
+        }
+
+        // Refresh Notifications
+        function refreshNotifications() {
+            location.reload();
         }
 
         function getCSRFToken() {

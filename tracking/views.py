@@ -362,6 +362,29 @@ class NotificationMarkReadView(APIView):
             )
 
 
+class NotificationDeleteView(APIView):
+    """Bildirimi sil (Admin veya bildirim sahibi)"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def delete(self, request, pk):
+        try:
+            notification = Notification.objects.get(pk=pk)
+            # Admin ise herhangi bir bildirimi silebilir, normal kullanıcı sadece kendi bildirimlerini
+            if request.user.is_staff or request.user.is_superuser or notification.user == request.user:
+                notification.delete()
+                return Response({"message": "Bildirim silindi."}, status=status.HTTP_200_OK)
+            else:
+                return Response(
+                    {"detail": "Bu bildirimi silməyə icazəniz yoxdur."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except Notification.DoesNotExist:
+            return Response(
+                {"detail": "Bildirim tapılmadı."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
 # Admin Dashboard View
 def is_staff_user(user):
     return user.is_staff or user.is_superuser
@@ -413,6 +436,11 @@ def admin_dashboard(request):
         'route__user'
     ).order_by('-timestamp')[:50]
     
+    # Son bildirimler (tüm kullanıcılar için - admin görüntülemesi)
+    recent_notifications = Notification.objects.select_related(
+        'user'
+    ).order_by('-created_at')[:50]
+    
     context = {
         'total_users': total_users,
         'active_users': active_users,
@@ -425,6 +453,7 @@ def admin_dashboard(request):
         'active_routes_list': active_routes_list,
         'routes_data': routes_data,
         'recent_locations': recent_locations,
+        'recent_notifications': recent_notifications,
     }
     
     return render(request, 'dashboard.html', context)
