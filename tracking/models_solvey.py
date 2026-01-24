@@ -57,8 +57,10 @@ class SolveyDoctor(models.Model):
     ad = models.CharField(max_length=255)
     ixtisas = models.CharField(max_length=255, blank=True, null=True)
     kategoriya = models.CharField(max_length=10, blank=True, null=True)
-    derece = models.CharField(max_length=10, blank=True, null=True)
+    derece = models.CharField(max_length=10, blank=True, null=True)  # Dərəcə (I, II, III)
+    vip = models.CharField(max_length=10, blank=True, null=True)  # VIP status (I, II, III və ya boş)
     cinsiyyet = models.CharField(max_length=10, blank=True, null=True)
+    number = models.CharField(max_length=50, blank=True, null=True)  # Telefon nömrəsi
     bolge_id = models.IntegerField(null=True, blank=True)
     city_id = models.IntegerField(null=True, blank=True)
     klinika_id = models.IntegerField(null=True, blank=True)

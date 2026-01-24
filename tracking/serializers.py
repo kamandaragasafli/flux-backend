@@ -26,43 +26,34 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.Serializer):
-    username = serializers.CharField(required=False, allow_blank=True)
-    email = serializers.EmailField(required=False, allow_blank=True)
+    username = serializers.CharField(required=True)
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
     password = serializers.CharField(write_only=True, min_length=6)
     password2 = serializers.CharField(write_only=True, min_length=6)
 
     def validate(self, attrs):
         username = attrs.get("username")
-        email = attrs.get("email")
+        email = attrs.get("email", "")
         password = attrs.get("password")
         password2 = attrs.get("password2")
 
-        # Ya username ya da email olmalıdır
-        if not username and not email:
-            raise serializers.ValidationError("Username və ya email tələb olunur.")
+        # Username tələb olunur
+        if not username or not username.strip():
+            raise serializers.ValidationError("İstifadəçi adı tələb olunur.")
         
         # Şifrələr eyni olmalıdır
         if password != password2:
             raise serializers.ValidationError("Şifrələr eyni olmalıdır.")
         
-        # Username və ya email artıq mövcuddursa
-        if username and User.objects.filter(username=username).exists():
+        # Username artıq mövcuddursa
+        if User.objects.filter(username=username).exists():
             raise serializers.ValidationError("Bu istifadəçi adı artıq mövcuddur.")
         
-        if email and User.objects.filter(email=email).exists():
+        # Email varsa və artıq mövcuddursa
+        if email and email.strip() and User.objects.filter(email=email).exists():
             raise serializers.ValidationError("Bu email artıq mövcuddur.")
         
-        # Username yoxdursa, email-dən yarat
-        if not username and email:
-            username = email.split('@')[0]
-            # Username unikal olmalıdır
-            counter = 1
-            original_username = username
-            while User.objects.filter(username=username).exists():
-                username = f"{original_username}{counter}"
-                counter += 1
-        
-        attrs["username"] = username
+        attrs["username"] = username.strip()
         attrs["password"] = password
         return attrs
 
@@ -71,9 +62,13 @@ class RegisterSerializer(serializers.Serializer):
         email = validated_data.get("email", "")
         password = validated_data["password"]
         
+        # Email yoxdursa, default email yarat
+        if not email or not email.strip():
+            email = f"{username}@flux.local"
+        
         user = User.objects.create_user(
             username=username,
-            email=email if email else f"{username}@example.com",
+            email=email,
             password=password
         )
         
@@ -88,8 +83,12 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        username = attrs.get("username")
-        password = attrs.get("password")
+        username = attrs.get("username", "").strip()  # Boşluqları təmizlə
+        password = attrs.get("password", "").strip()  # Boşluqları təmizlə
+        
+        if not username or not password:
+            raise serializers.ValidationError("Username və şifrə tələb olunur.")
+        
         user = authenticate(username=username, password=password)
         if not user:
             raise serializers.ValidationError("Invalid credentials.")

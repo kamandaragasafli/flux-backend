@@ -667,20 +667,32 @@ def get_solvey_doctors(request):
                 return Response({'success': False, 'error': 'Invalid hospital_id'}, status=status.HTTP_400_BAD_REQUEST)
         
         doctors = doctors.order_by('ad')
-        data = [
-            {
+        data = []
+        for d in doctors:
+            # Hospital name-i tap
+            hospital_name = ''
+            if d.klinika_id:
+                try:
+                    hospital = SolveyHospital.objects.filter(id=d.klinika_id).first()
+                    if hospital:
+                        hospital_name = hospital.hospital_name or ''
+                except Exception:
+                    pass
+            
+            data.append({
                 'id': d.id,
-                'name': d.ad,
+                'name': d.ad or '',
                 'specialty': d.ixtisas or '',
                 'category': d.kategoriya or '',
                 'degree': d.derece or '',
+                'vip': (d.vip or '').strip() if hasattr(d, 'vip') else '',  # VIP field-i
                 'gender': d.cinsiyyet or '',
                 'region_id': d.bolge_id,
                 'city_id': d.city_id,
-                'hospital_id': d.klinika_id
-            }
-            for d in doctors
-        ]
+                'hospital_id': d.klinika_id,
+                'hospital': hospital_name,
+                'phone': (d.number or '').strip()
+            })
         return Response({'success': True, 'data': data})
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
