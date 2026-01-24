@@ -142,6 +142,17 @@ class CreateLocationView(generics.CreateAPIView):
 class RouteDetailView(generics.RetrieveAPIView):
     queryset = Route.objects.all()
     serializer_class = RouteSerializer
+    permission_classes = [permissions.AllowAny]  # Dashboard için
+    
+    def get_queryset(self):
+        # Staff user ise tüm route'ları görebilir
+        if self.request.user.is_authenticated and (self.request.user.is_staff or self.request.user.is_superuser):
+            return Route.objects.all()
+        # Normal user sadece kendi route'larını görebilir
+        elif self.request.user.is_authenticated:
+            return Route.objects.filter(user=self.request.user)
+        # Unauthenticated ise boş döndür (dashboard'da staff kontrolü yapılır)
+        return Route.objects.none()
 
 
 class CurrentUserView(APIView):
@@ -225,17 +236,42 @@ class CurrentUserView(APIView):
 class RoutesListView(generics.ListAPIView):
     """Kullanıcının tüm route'larını listeler"""
     serializer_class = RouteSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    # Dashboard için tüm route'ları görebilmek için AllowAny
+    permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
-        return Route.objects.filter(user=self.request.user).order_by('-start_time')
+        user_id = self.request.query_params.get('user')
+        if user_id:
+            # Belirli bir kullanıcının route'ları
+            return Route.objects.filter(user_id=user_id).order_by('-start_time')
+        elif self.request.user.is_authenticated:
+            # Kendi route'ları
+            return Route.objects.filter(user=self.request.user).order_by('-start_time')
+        else:
+            # Authenticated değilse boş döndür
+            return Route.objects.none()
 
 
 class LastLocationsView(APIView):
     """Tüm kullanıcıların son konumlarını döndürür (harita için)"""
-    permission_classes = [permissions.IsAuthenticated]
+    # Dashboard için session authentication kullanılır
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
+        # Session authentication ile gelen istekler için kontrol
+        # Eğer authenticated değilse ve staff user değilse boş döndür
+        if not request.user.is_authenticated:
+            return Response({
+                "features": [],
+                "error": "Bu endpoint'e sadece admin kullanıcılar erişebilir."
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({
+                "features": [],
+                "error": "Bu endpoint'e sadece admin kullanıcılar erişebilir."
+            }, status=status.HTTP_403_FORBIDDEN)
+        
         # Her kullanıcının son konumunu al
         users = User.objects.all()
         features = []
@@ -247,12 +283,15 @@ class LastLocationsView(APIView):
             ).order_by('-timestamp').first()
             
             if last_location:
+                route = last_location.route
                 features.append({
                     "id": user.id,
                     "ad": user.username,
                     "username": user.username,  # Dashboard için
                     "lat": float(last_location.latitude),
                     "lng": float(last_location.longitude),
+                    "status": route.connection_status if route else "unknown",
+                    "is_paused": route.is_paused if route else False,
                 })
         
         return Response({
@@ -348,7 +387,8 @@ def admin_dashboard(request):
     users = User.objects.annotate(
         route_count=Count('routes'),
         location_count=Count('routes__points'),
-        last_activity=Max('routes__start_time')
+        last_activity=Max('routes__start_time'),
+        has_active_route=Count('routes', filter=Q(routes__end_time__isnull=True))
     ).order_by('-date_joined')[:50]
     
     # Aktif route'lar - bağlantı durumları ile
