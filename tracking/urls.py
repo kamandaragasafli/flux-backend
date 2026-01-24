@@ -57,6 +57,11 @@ urlpatterns = [
     path("external/tables/", views_external.external_tables, name="external-tables"),
     path("external/table-info/", views_external.external_table_info, name="external-table-info"),
     path("external/custom/", views_external.external_custom_data, name="external-custom"),
+    # Solvey Database API Endpoints
+    path("solvey/regions/", views.get_solvey_regions, name="solvey-regions"),
+    path("solvey/cities/", views.get_solvey_cities, name="solvey-cities"),
+    path("solvey/hospitals/", views.get_solvey_hospitals, name="solvey-hospitals"),
+    path("solvey/doctors/", views.get_solvey_doctors, name="solvey-doctors"),
     # ViewSet routes
     path("", include(router.urls)),
 ]

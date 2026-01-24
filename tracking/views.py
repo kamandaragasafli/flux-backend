@@ -1,6 +1,8 @@
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from django.db.models import Max, Count, Q
@@ -12,6 +14,7 @@ import requests
 import os
 
 from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification
+from .models_solvey import SolveyRegion, SolveyCity, SolveyHospital, SolveyDoctor
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
@@ -522,3 +525,162 @@ class HospitalVisitViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         serializer.save()
+
+
+# ============================================================================
+# Solvey Database API Endpoints
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_solvey_regions(request):
+    """
+    Solvey database-dən bütün bölgələri çəkir
+    GET /api/solvey/regions/
+    """
+    try:
+        regions = SolveyRegion.objects.all().order_by('region_name')
+        data = [
+            {
+                'id': r.id,
+                'name': r.region_name,
+                'type': r.region_type
+            }
+            for r in regions
+        ]
+        return Response({'success': True, 'data': data})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_solvey_cities(request):
+    """
+    Solvey database-dən şəhərləri çəkir
+    GET /api/solvey/cities/?region_id=X (opsional)
+    """
+    try:
+        cities = SolveyCity.objects.all()
+        
+        # Region filter (opsional)
+        region_id = request.GET.get('region_id')
+        if region_id:
+            try:
+                region_id = int(region_id)
+                cities = cities.filter(region_id=region_id)
+            except ValueError:
+                return Response({'success': False, 'error': 'Invalid region_id'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        cities = cities.order_by('city_name')
+        data = [
+            {
+                'id': c.id,
+                'name': c.city_name,
+                'region_id': c.region_id
+            }
+            for c in cities
+        ]
+        return Response({'success': True, 'data': data})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_solvey_hospitals(request):
+    """
+    Solvey database-dən xəstəxanaları çəkir
+    GET /api/solvey/hospitals/?city_id=X&region_id=X (opsional)
+    """
+    try:
+        hospitals = SolveyHospital.objects.all()
+        
+        # City filter (opsional)
+        city_id = request.GET.get('city_id')
+        if city_id:
+            try:
+                city_id = int(city_id)
+                hospitals = hospitals.filter(city_id=city_id)
+            except ValueError:
+                return Response({'success': False, 'error': 'Invalid city_id'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Region filter (opsional)
+        region_id = request.GET.get('region_id')
+        if region_id:
+            try:
+                region_id = int(region_id)
+                hospitals = hospitals.filter(region_net_id=region_id)
+            except ValueError:
+                return Response({'success': False, 'error': 'Invalid region_id'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        hospitals = hospitals.order_by('hospital_name')
+        data = [
+            {
+                'id': h.id,
+                'name': h.hospital_name,
+                'city_id': h.city_id,
+                'region_id': h.region_net_id
+            }
+            for h in hospitals
+        ]
+        return Response({'success': True, 'data': data})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_solvey_doctors(request):
+    """
+    Solvey database-dən həkimləri çəkir
+    GET /api/solvey/doctors/?region_id=X&city_id=X&hospital_id=X (opsional)
+    """
+    try:
+        doctors = SolveyDoctor.objects.all()
+        
+        # Region filter (opsional)
+        region_id = request.GET.get('region_id')
+        if region_id:
+            try:
+                region_id = int(region_id)
+                doctors = doctors.filter(bolge_id=region_id)
+            except ValueError:
+                return Response({'success': False, 'error': 'Invalid region_id'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # City filter (opsional)
+        city_id = request.GET.get('city_id')
+        if city_id:
+            try:
+                city_id = int(city_id)
+                doctors = doctors.filter(city_id=city_id)
+            except ValueError:
+                return Response({'success': False, 'error': 'Invalid city_id'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Hospital filter (opsional)
+        hospital_id = request.GET.get('hospital_id')
+        if hospital_id:
+            try:
+                hospital_id = int(hospital_id)
+                doctors = doctors.filter(klinika_id=hospital_id)
+            except ValueError:
+                return Response({'success': False, 'error': 'Invalid hospital_id'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        doctors = doctors.order_by('ad')
+        data = [
+            {
+                'id': d.id,
+                'name': d.ad,
+                'specialty': d.ixtisas or '',
+                'category': d.kategoriya or '',
+                'degree': d.derece or '',
+                'gender': d.cinsiyyet or '',
+                'region_id': d.bolge_id,
+                'city_id': d.city_id,
+                'hospital_id': d.klinika_id
+            }
+            for d in doctors
+        ]
+        return Response({'success': True, 'data': data})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -16,8 +16,10 @@ class ExternalDatabaseRouter:
     
     # External database kullanacak model'ler (app_name.ModelName formatında)
     external_models = [
-        # Örnek: 'external.User', 'external.Order'
-        # Kendi model'lerinizi buraya ekleyin
+        'tracking.SolveyRegion',
+        'tracking.SolveyCity',
+        'tracking.SolveyHospital',
+        'tracking.SolveyDoctor',
     ]
     
     def db_for_read(self, model, **hints):
