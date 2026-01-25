@@ -539,7 +539,7 @@ def get_solvey_regions(request):
     GET /api/solvey/regions/
     """
     try:
-        regions = SolveyRegion.objects.all().order_by('region_name')
+        regions = SolveyRegion.objects.using('external').all().order_by('region_name')
         data = [
             {
                 'id': r.id,
@@ -561,7 +561,7 @@ def get_solvey_cities(request):
     GET /api/solvey/cities/?region_id=X (opsional)
     """
     try:
-        cities = SolveyCity.objects.all()
+        cities = SolveyCity.objects.using('external').all()
         
         # Region filter (opsional)
         region_id = request.GET.get('region_id')
@@ -594,7 +594,7 @@ def get_solvey_hospitals(request):
     GET /api/solvey/hospitals/?city_id=X&region_id=X (opsional)
     """
     try:
-        hospitals = SolveyHospital.objects.all()
+        hospitals = SolveyHospital.objects.using('external').all()
         
         # City filter (opsional)
         city_id = request.GET.get('city_id')
@@ -637,7 +637,10 @@ def get_solvey_doctors(request):
     GET /api/solvey/doctors/?region_id=X&city_id=X&hospital_id=X (opsional)
     """
     try:
-        doctors = SolveyDoctor.objects.all()
+        logger.info("[SOLVEY_DOCTORS] Starting get_solvey_doctors")
+        # External database-dən həkimləri çək
+        doctors = SolveyDoctor.objects.using('external').all()
+        logger.info(f"[SOLVEY_DOCTORS] Initial doctors count: {doctors.count()}")
         
         # Region filter (opsional)
         region_id = request.GET.get('region_id')
@@ -645,6 +648,7 @@ def get_solvey_doctors(request):
             try:
                 region_id = int(region_id)
                 doctors = doctors.filter(bolge_id=region_id)
+                logger.info(f"[SOLVEY_DOCTORS] Filtered by region_id={region_id}, count: {doctors.count()}")
             except ValueError:
                 return Response({'success': False, 'error': 'Invalid region_id'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -654,6 +658,7 @@ def get_solvey_doctors(request):
             try:
                 city_id = int(city_id)
                 doctors = doctors.filter(city_id=city_id)
+                logger.info(f"[SOLVEY_DOCTORS] Filtered by city_id={city_id}, count: {doctors.count()}")
             except ValueError:
                 return Response({'success': False, 'error': 'Invalid city_id'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -663,29 +668,60 @@ def get_solvey_doctors(request):
             try:
                 hospital_id = int(hospital_id)
                 doctors = doctors.filter(klinika_id=hospital_id)
+                logger.info(f"[SOLVEY_DOCTORS] Filtered by hospital_id={hospital_id}, count: {doctors.count()}")
             except ValueError:
                 return Response({'success': False, 'error': 'Invalid hospital_id'}, status=status.HTTP_400_BAD_REQUEST)
         
         doctors = doctors.order_by('ad')
+        logger.info(f"[SOLVEY_DOCTORS] Final doctors count before processing: {doctors.count()}")
         data = []
         for d in doctors:
             # Hospital name-i tap
             hospital_name = ''
             if d.klinika_id:
                 try:
-                    hospital = SolveyHospital.objects.filter(id=d.klinika_id).first()
+                    hospital = SolveyHospital.objects.using('external').filter(id=d.klinika_id).first()
                     if hospital:
                         hospital_name = hospital.hospital_name or ''
-                except Exception:
+                except Exception as e:
+                    logger.error(f"[SOLVEY_DOCTORS] Error fetching hospital for doctor {d.id}: {e}")
                     pass
+            
+            # Dərəcə field-indən VIP və dərəcəni ayır
+            # derece field-ində: VIP, I, II, III ola bilər
+            derece_value = d.derece or ''
+            vip_value = ''
+            degree_value = ''
+            
+            try:
+                if derece_value:
+                    derece_str = str(derece_value).strip().upper()
+                    # Əgər tam olaraq "VIP" və ya "VIP I", "VIP II", "VIP III" varsa
+                    if derece_str == 'VIP':
+                        # Yalnız VIP var, dərəcə yoxdur
+                        vip_value = 'VIP'
+                        degree_value = ''
+                    elif derece_str.startswith('VIP'):
+                        # VIP I, VIP II, VIP III formatı
+                        vip_value = 'VIP'
+                        # VIP-dən sonra qalan hissə dərəcədir
+                        degree_value = derece_str.replace('VIP', '').strip()
+                    else:
+                        # Yalnız dərəcə var (I, II, III)
+                        degree_value = derece_str
+                        vip_value = ''
+            except Exception as e:
+                # Parsing xətası olsa, dərəcəni olduğu kimi saxla
+                degree_value = str(derece_value).strip() if derece_value else ''
+                vip_value = ''
             
             data.append({
                 'id': d.id,
                 'name': d.ad or '',
                 'specialty': d.ixtisas or '',
                 'category': d.kategoriya or '',
-                'degree': d.derece or '',
-                'vip': (d.vip or '').strip() if hasattr(d, 'vip') else '',  # VIP field-i
+                'degree': degree_value,  # Yalnız dərəcə (I, II, III)
+                'vip': vip_value,  # VIP dərəcəsi (I, II, III)
                 'gender': d.cinsiyyet or '',
                 'region_id': d.bolge_id,
                 'city_id': d.city_id,
@@ -693,6 +729,11 @@ def get_solvey_doctors(request):
                 'hospital': hospital_name,
                 'phone': (d.number or '').strip()
             })
+        logger.info(f"[SOLVEY_DOCTORS] Returning {len(data)} doctors")
         return Response({'success': True, 'data': data})
     except Exception as e:
-        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[SOLVEY_DOCTORS] Error in get_solvey_doctors: {e}")
+        print(f"[SOLVEY_DOCTORS] Traceback: {error_trace}")
+        return Response({'success': False, 'error': str(e), 'traceback': error_trace}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
