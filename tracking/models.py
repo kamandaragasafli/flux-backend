@@ -212,3 +212,34 @@ class Notification(models.Model):
     
     def __str__(self) -> str:
         return f"{self.notification_type.upper()} - {self.user.username}: {self.title}"
+
+
+class LocationPermissionReport(models.Model):
+    """Konum icazəsi rədd edildikdə istifadəçinin səbəb bildirməsi"""
+    
+    REASON_CHOICES = [
+        ('stopped_tracking', 'İzləməni dayandırdım'),
+        ('location_disabled', 'Telefonun konumunu bağladım'),
+        ('privacy', 'Məxfilik narahatlığı'),
+        ('battery', 'Batareya istehlakı'),
+        ('not_needed', 'İstifadə etmirəm'),
+        ('security', 'Təhlükəsizlik narahatlığı'),
+        ('other', 'Digər'),
+    ]
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="location_permission_reports"
+    )
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES)
+    reason_text = models.TextField(blank=True, null=True)  # Digər səbəb üçün
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "Location Permission Report"
+        verbose_name_plural = "Location Permission Reports"
+    
+    def __str__(self) -> str:
+        return f"{self.user.username} - {self.get_reason_display()} ({self.timestamp})"

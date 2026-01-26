@@ -62,6 +62,8 @@ urlpatterns = [
     path("solvey/cities/", views.get_solvey_cities, name="solvey-cities"),
     path("solvey/hospitals/", views.get_solvey_hospitals, name="solvey-hospitals"),
     path("solvey/doctors/", views.get_solvey_doctors, name="solvey-doctors"),
+    # Location Permission Reports
+    path("location-permission-reports/", views.create_location_permission_report, name="location-permission-reports"),
     # ViewSet routes
     path("", include(router.urls)),
 ]

@@ -12,6 +12,7 @@ from django.utils import timezone
 from datetime import timedelta
 import requests
 import os
+import logging
 
 from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification
 from .models_solvey import SolveyRegion, SolveyCity, SolveyHospital, SolveyDoctor
@@ -31,6 +32,9 @@ from .serializers import (
 # SSL uyarılarını bastır (development için)
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Logger təyin et
+logger = logging.getLogger(__name__)
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -647,9 +651,26 @@ def get_solvey_doctors(request):
         if region_id:
             try:
                 region_id = int(region_id)
+                logger.info(f"[SOLVEY_DOCTORS] Filtering by region_id={region_id}")
+                doctors_before = doctors.count()
                 doctors = doctors.filter(bolge_id=region_id)
-                logger.info(f"[SOLVEY_DOCTORS] Filtered by region_id={region_id}, count: {doctors.count()}")
+                doctors_after = doctors.count()
+                logger.info(f"[SOLVEY_DOCTORS] Before filter: {doctors_before}, After filter: {doctors_after}")
+                
+                # Əgər həkim tapılmadısa, bəlkə bölgə ID-si yanlışdır
+                if doctors_after == 0:
+                    logger.warning(f"[SOLVEY_DOCTORS] No doctors found for region_id={region_id}")
+                    # Bölgədə həkim olub-olmadığını yoxla
+                    try:
+                        region = SolveyRegion.objects.using('external').filter(id=region_id).first()
+                        if region:
+                            logger.info(f"[SOLVEY_DOCTORS] Region exists: {region.region_name} (ID: {region.id})")
+                        else:
+                            logger.warning(f"[SOLVEY_DOCTORS] Region with ID {region_id} does not exist in database")
+                    except Exception as e:
+                        logger.error(f"[SOLVEY_DOCTORS] Error checking region: {e}")
             except ValueError:
+                logger.error(f"[SOLVEY_DOCTORS] Invalid region_id format: {region_id}")
                 return Response({'success': False, 'error': 'Invalid region_id'}, status=status.HTTP_400_BAD_REQUEST)
         
         # City filter (opsional)
@@ -734,6 +755,62 @@ def get_solvey_doctors(request):
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"[SOLVEY_DOCTORS] Error in get_solvey_doctors: {e}")
-        print(f"[SOLVEY_DOCTORS] Traceback: {error_trace}")
+        logger.error(f"[SOLVEY_DOCTORS] Error in get_solvey_doctors: {e}")
+        logger.error(f"[SOLVEY_DOCTORS] Traceback: {error_trace}")
         return Response({'success': False, 'error': str(e), 'traceback': error_trace}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_location_permission_report(request):
+    """
+    Konum icazəsi rədd edildikdə istifadəçinin səbəb bildirməsi
+    POST /api/location-permission-reports/
+    Body: {
+        "reason": "privacy|battery|not_needed|security|other",
+        "reason_text": "string (optional, required if reason='other')"
+    }
+    """
+    try:
+        user = request.user
+        data = request.data
+        
+        reason = data.get('reason')
+        reason_text = data.get('reason_text', '')
+        
+        # Validation
+        valid_reasons = ['stopped_tracking', 'location_disabled', 'privacy', 'battery', 'not_needed', 'security', 'other']
+        if not reason or reason not in valid_reasons:
+            return Response(
+                {'success': False, 'error': f'Invalid reason. Must be one of: {valid_reasons}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if reason == 'other' and not reason_text:
+            return Response(
+                {'success': False, 'error': 'reason_text is required when reason is "other"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create report
+        from .models import LocationPermissionReport
+        report = LocationPermissionReport.objects.create(
+            user=user,
+            reason=reason,
+            reason_text=reason_text if reason == 'other' else None
+        )
+        
+        logger.info(f"[LOCATION_REPORT] Created report for user {user.username}: {reason}")
+        
+        return Response({
+            'success': True,
+            'message': 'Rapor uğurla göndərildi',
+            'report_id': report.id
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        logger.error(f"[LOCATION_REPORT] Error creating report: {e}")
+        return Response(
+            {'success': False, 'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
