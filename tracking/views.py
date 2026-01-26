@@ -814,3 +814,94 @@ def create_location_permission_report(request):
             {'success': False, 'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_visited_doctor(request):
+    """
+    Görülən həkim əlavə et
+    POST /api/visited-doctors/
+    Body: {
+        "doctor_id": 123,
+        "doctor_name": "Dr. Əli Məmmədov",
+        "doctor_specialty": "Kardiologiya",
+        "doctor_hospital": "Xəstəxana adı"
+    }
+    """
+    try:
+        user = request.user
+        data = request.data
+        
+        doctor_id = data.get('doctor_id')
+        doctor_name = data.get('doctor_name', '')
+        doctor_specialty = data.get('doctor_specialty', '')
+        doctor_hospital = data.get('doctor_hospital', '')
+        
+        if not doctor_id:
+            return Response(
+                {'success': False, 'error': 'doctor_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create visited doctor record
+        from .models import VisitedDoctor
+        visited_doctor = VisitedDoctor.objects.create(
+            user=user,
+            doctor_id=doctor_id,
+            doctor_name=doctor_name,
+            doctor_specialty=doctor_specialty,
+            doctor_hospital=doctor_hospital
+        )
+        
+        logger.info(f"[VISITED_DOCTOR] Added visited doctor for user {user.username}: {doctor_name} (ID: {doctor_id})")
+        
+        return Response({
+            'success': True,
+            'message': 'Həkim görülən həkimlərə əlavə edildi',
+            'visited_doctor_id': visited_doctor.id
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        logger.error(f"[VISITED_DOCTOR] Error adding visited doctor: {e}")
+        return Response(
+            {'success': False, 'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_visited_doctors(request):
+    """
+    İstifadəçinin görülən həkimlərini gətir
+    GET /api/visited-doctors/
+    """
+    try:
+        user = request.user
+        from .models import VisitedDoctor
+        
+        visited_doctors = VisitedDoctor.objects.filter(user=user).order_by('-visit_date')
+        
+        data = [{
+            'id': vd.id,
+            'doctor_id': vd.doctor_id,
+            'doctor_name': vd.doctor_name,
+            'doctor_specialty': vd.doctor_specialty,
+            'doctor_hospital': vd.doctor_hospital,
+            'visit_date': vd.visit_date.isoformat(),
+        } for vd in visited_doctors]
+        
+        logger.info(f"[VISITED_DOCTOR] Returning {len(data)} visited doctors for user {user.username}")
+        
+        return Response({
+            'success': True,
+            'data': data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"[VISITED_DOCTOR] Error fetching visited doctors: {e}")
+        return Response(
+            {'success': False, 'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
