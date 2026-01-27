@@ -16,6 +16,9 @@ DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "206.189.53.174,localhost,127.0.0.1").split(",")
 CSRF_TRUSTED_ORIGINS = [
     "http://206.189.53.174",
+    "https://206.189.53.174",
+    "http://206.189.53.174:8081",
+    "https://206.189.53.174:8081",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
