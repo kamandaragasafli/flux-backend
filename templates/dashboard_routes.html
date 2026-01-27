@@ -1,0 +1,92 @@
+{% extends "dashboard_base.html" %}
+
+{% block content %}
+<div class="dashboard-content">
+    <div class="performance-header">
+        <div class="performance-title">Route Management</div>
+        <div class="performance-main-title">Routes</div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">Active Routes ({{ active_routes }})</div>
+        </div>
+        {% if active_routes_list %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>USER</th>
+                        <th>START TIME</th>
+                        <th>POINTS</th>
+                        <th>STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for route in active_routes_list %}
+                    <tr>
+                        <td><strong>{{ route.user.username }}</strong></td>
+                        <td>{{ route.start_time|date:"d.m.Y H:i" }}</td>
+                        <td>{{ route.points.count }}</td>
+                        <td>
+                            {% if route.is_paused %}
+                            <span class="badge badge-warning">Paused</span>
+                            {% else %}
+                            <span class="badge badge-success">Active</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-route"></i>
+            <p>No active routes</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="section-card" style="margin-top: 24px;">
+        <div class="section-header">
+            <div class="section-title">Hospital Visits (Last 50)</div>
+        </div>
+        {% if recent_hospital_visits %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>USER</th>
+                        <th>HOSPITAL</th>
+                        <th>DOCTOR</th>
+                        <th>DATE</th>
+                        <th>TIME</th>
+                        <th>DURATION (min)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for visit in recent_hospital_visits %}
+                    <tr>
+                        <td><strong>{{ visit.user.username }}</strong></td>
+                        <td>{{ visit.hospital_name }}</td>
+                        <td>{{ visit.doctor_name }}</td>
+                        <td>{{ visit.visit_date|date:"d.m.Y" }}</td>
+                        <td>{{ visit.check_in_time|time:"H:i" }}</td>
+                        <td>{{ visit.duration_minutes|default:"-" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-hospital"></i>
+            <p>No hospital visits found</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+

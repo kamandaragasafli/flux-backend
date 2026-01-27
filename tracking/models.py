@@ -232,7 +232,7 @@ class VisitedDoctor(models.Model):
         ordering = ['-visit_date']
         verbose_name = "Visited Doctor"
         verbose_name_plural = "Visited Doctors"
-        unique_together = ['user', 'doctor_id', 'visit_date']  # Eyni gündə eyni həkim iki dəfə qeyd olunmasın
+        # unique_together silindi - hər dəfə yeni record yaradılacaq (tarix ilə birlikdə)
     
     def __str__(self) -> str:
         return f"{self.user.username} - {self.doctor_name} ({self.visit_date.date()})"
@@ -250,7 +250,8 @@ class LocationPermissionReport(models.Model):
         ('security', 'Təhlükəsizlik narahatlığı'),
         ('other', 'Digər'),
     ]
-    
+
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

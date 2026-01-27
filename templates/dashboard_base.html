@@ -1,0 +1,103 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flux Admin</title>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">
+            <h2>FLUX</h2>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a href="{% url 'dashboard_home' %}" class="nav-link {% if active_page == 'home' %}active{% endif %}">
+                    <i class="fas fa-gauge"></i>
+                    <span>DASHBOARD</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_users' %}" class="nav-link {% if active_page == 'users' %}active{% endif %}">
+                    <i class="fas fa-users"></i>
+                    <span>USERS</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_map' %}" class="nav-link {% if active_page == 'map' %}active{% endif %}">
+                    <i class="fas fa-map"></i>
+                    <span>MAP</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_routes' %}" class="nav-link {% if active_page == 'routes' %}active{% endif %}">
+                    <i class="fas fa-route"></i>
+                    <span>ROUTES</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_notifications' %}" class="nav-link {% if active_page == 'notifications' %}active{% endif %}">
+                    <i class="fas fa-bell"></i>
+                    <span>NOTIFICATIONS</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_locations' %}" class="nav-link {% if active_page == 'locations' %}active{% endif %}">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>LOCATIONS</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <div class="top-bar">
+            <h1>Flux Tracking Dashboard</h1>
+            <div class="top-bar-actions">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search...">
+                </div>
+                <div class="top-bar-icons">
+                    <div class="icon-btn">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="icon-btn">
+                        <i class="fas fa-gear"></i>
+                    </div>
+                </div>
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        {{ request.user.username|first|upper }}
+                    </div>
+                    <div>
+                        <div style="font-size: 13px; color: #e5e7eb;">{{ request.user.username }}</div>
+                        <div style="font-size: 11px; color: #9ca3af;">Admin</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <script src="{% static 'js/dashboard.js' %}"></script>
+</body>
+</html>
+
+

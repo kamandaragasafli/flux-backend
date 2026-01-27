@@ -1,0 +1,61 @@
+{% extends "dashboard_base.html" %}
+
+{% block content %}
+<div class="dashboard-content">
+    <div class="performance-header">
+        <div class="performance-title">User Management</div>
+        <div class="performance-main-title">Users</div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">All Users ({{ total_users }})</div>
+        </div>
+        {% if users %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>USERNAME</th>
+                        <th>ROUTES</th>
+                        <th>LOCATIONS</th>
+                        <th>LAST ACTIVITY</th>
+                        <th>ACTIVE ROUTE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td><strong>{{ user.username }}</strong></td>
+                        <td>{{ user.route_count }}</td>
+                        <td>{{ user.location_count }}</td>
+                        <td>
+                            {% if user.last_activity %}
+                                {{ user.last_activity|date:"d.m.Y H:i" }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.has_active_route %}
+                            <span class="badge badge-success">Active</span>
+                            {% else %}
+                            <span class="badge badge-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-users"></i>
+            <p>No users found</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+

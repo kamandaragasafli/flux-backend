@@ -14,7 +14,16 @@ import requests
 import os
 import logging
 
-from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification
+from .models import (
+    Route,
+    LocationPoint,
+    VisitSchedule,
+    HospitalVisit,
+    UserProfile,
+    Notification,
+    VisitedDoctor,
+    LocationPermissionReport,
+)
 from .models_solvey import SolveyRegion, SolveyCity, SolveyHospital, SolveyDoctor
 from .serializers import (
     RegisterSerializer,
@@ -416,78 +425,149 @@ class NotificationDeleteView(APIView):
             )
 
 
-# Admin Dashboard View
 def is_staff_user(user):
     return user.is_staff or user.is_superuser
 
 
 @user_passes_test(is_staff_user)
-def admin_dashboard(request):
-    """Özelleştirilmiş admin dashboard"""
-    
-    # İstatistikler
+def admin_dashboard_home(request):
+    """Admin dashboard - ana səhifə"""
+
     total_users = User.objects.count()
     active_users = User.objects.filter(routes__end_time__isnull=True).distinct().count()
     total_routes = Route.objects.count()
     active_routes = Route.objects.filter(end_time__isnull=True).count()
     total_locations = LocationPoint.objects.count()
-    
-    # Son 24 saat
+    total_hospital_visits = HospitalVisit.objects.count()
+    total_visited_doctors = VisitedDoctor.objects.count()
+    total_schedules = VisitSchedule.objects.count()
+    total_location_reports = LocationPermissionReport.objects.count()
+
     last_24h = timezone.now() - timedelta(hours=24)
     routes_last_24h = Route.objects.filter(start_time__gte=last_24h).count()
     locations_last_24h = LocationPoint.objects.filter(timestamp__gte=last_24h).count()
-    
-    # Kullanıcılar listesi
-    users = User.objects.annotate(
-        route_count=Count('routes'),
-        location_count=Count('routes__points'),
-        last_activity=Max('routes__start_time'),
-        has_active_route=Count('routes', filter=Q(routes__end_time__isnull=True))
-    ).order_by('-date_joined')[:50]
-    
-    # Aktif route'lar - bağlantı durumları ile
-    active_routes_list = Route.objects.filter(
-        end_time__isnull=True
-    ).select_related('user').prefetch_related('points').order_by('-start_time')[:20]
-    
-    # Her route için ek bilgiler
-    routes_data = []
-    for route in active_routes_list:
-        last_point = route.points.last()
-        routes_data.append({
-            'route': route,
-            'last_point': last_point,
-            'connection_status': route.connection_status,
-            'is_paused': route.is_paused,
-            'point_count': route.points.count(),
-        })
-    
-    # Son location point'ler
-    recent_locations = LocationPoint.objects.select_related(
-        'route__user'
-    ).order_by('-timestamp')[:50]
-    
-    # Son bildirimler (tüm kullanıcılar için - admin görüntülemesi)
-    recent_notifications = Notification.objects.select_related(
-        'user'
-    ).order_by('-created_at')[:50]
-    
+    hospital_visits_last_24h = HospitalVisit.objects.filter(visit_date__gte=last_24h.date()).count()
+    location_reports_last_24h = LocationPermissionReport.objects.filter(timestamp__gte=last_24h).count()
+
+    active_routes_list = (
+        Route.objects.filter(end_time__isnull=True)
+        .select_related("user")
+        .prefetch_related("points")
+        .order_by("-start_time")[:20]
+    )
+
+    recent_location_reports = (
+        LocationPermissionReport.objects.select_related("user")
+        .order_by("-timestamp")[:50]
+    )
+
     context = {
-        'total_users': total_users,
-        'active_users': active_users,
-        'total_routes': total_routes,
-        'active_routes': active_routes,
-        'total_locations': total_locations,
-        'routes_last_24h': routes_last_24h,
-        'locations_last_24h': locations_last_24h,
-        'users': users,
-        'active_routes_list': active_routes_list,
-        'routes_data': routes_data,
-        'recent_locations': recent_locations,
-        'recent_notifications': recent_notifications,
+        "active_page": "home",
+        "total_users": total_users,
+        "active_users": active_users,
+        "total_routes": total_routes,
+        "active_routes": active_routes,
+        "total_locations": total_locations,
+        "routes_last_24h": routes_last_24h,
+        "locations_last_24h": locations_last_24h,
+        "hospital_visits_last_24h": hospital_visits_last_24h,
+        "location_reports_last_24h": location_reports_last_24h,
+        "active_routes_list": active_routes_list,
+        "recent_location_reports": recent_location_reports,
+        "total_hospital_visits": total_hospital_visits,
+        "total_visited_doctors": total_visited_doctors,
+        "total_schedules": total_schedules,
+        "total_location_reports": total_location_reports,
     }
-    
-    return render(request, 'dashboard.html', context)
+    return render(request, "dashboard_home.html", context)
+
+
+@user_passes_test(is_staff_user)
+def admin_dashboard_users(request):
+    """Admin dashboard - istifadəçilər"""
+
+    users = (
+        User.objects.annotate(
+            route_count=Count("routes"),
+            location_count=Count("routes__points"),
+            last_activity=Max("routes__start_time"),
+            has_active_route=Count("routes", filter=Q(routes__end_time__isnull=True)),
+        )
+        .order_by("-date_joined")[:100]
+    )
+    context = {
+        "active_page": "users",
+        "users": users,
+        "total_users": users.count(),
+    }
+    return render(request, "dashboard_users.html", context)
+
+
+@user_passes_test(is_staff_user)
+def admin_dashboard_routes(request):
+    """Admin dashboard - route və xəstəxana ziyarətləri"""
+
+    active_routes = Route.objects.filter(end_time__isnull=True).count()
+    active_routes_list = (
+        Route.objects.filter(end_time__isnull=True)
+        .select_related("user")
+        .prefetch_related("points")
+        .order_by("-start_time")[:50]
+    )
+    recent_hospital_visits = (
+        HospitalVisit.objects.select_related("user")
+        .order_by("-visit_date", "-check_in_time")[:50]
+    )
+
+    context = {
+        "active_page": "routes",
+        "active_routes": active_routes,
+        "active_routes_list": active_routes_list,
+        "recent_hospital_visits": recent_hospital_visits,
+    }
+    return render(request, "dashboard_routes.html", context)
+
+
+@user_passes_test(is_staff_user)
+def admin_dashboard_locations(request):
+    """Admin dashboard - konum nöqtələri"""
+
+    last_24h = timezone.now() - timedelta(hours=24)
+    locations_last_24h = LocationPoint.objects.filter(timestamp__gte=last_24h).count()
+    recent_locations = (
+        LocationPoint.objects.select_related("route__user")
+        .order_by("-timestamp")[:100]
+    )
+    context = {
+        "active_page": "locations",
+        "locations_last_24h": locations_last_24h,
+        "recent_locations": recent_locations,
+    }
+    return render(request, "dashboard_locations.html", context)
+
+
+@user_passes_test(is_staff_user)
+def admin_dashboard_notifications(request):
+    """Admin dashboard - bildirişlər"""
+
+    recent_notifications = (
+        Notification.objects.select_related("user")
+        .order_by("-created_at")[:100]
+    )
+    context = {
+        "active_page": "notifications",
+        "recent_notifications": recent_notifications,
+    }
+    return render(request, "dashboard_notifications.html", context)
+
+
+@user_passes_test(is_staff_user)
+def admin_dashboard_map(request):
+    """Admin dashboard - xəritə"""
+    context = {
+        "active_page": "map",
+    }
+    return render(request, "dashboard_map.html", context)
 
 
 class VisitScheduleViewSet(viewsets.ModelViewSet):
@@ -903,5 +983,209 @@ def get_visited_doctors(request):
         logger.error(f"[VISITED_DOCTOR] Error fetching visited doctors: {e}")
         return Response(
             {'success': False, 'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_dashboard(request):
+    """
+    İstifadəçinin bütün aktivliklərini real-time formada qaytarır
+    GET /api/dashboard/
+    """
+    try:
+        from django.utils import timezone
+        from datetime import timedelta
+        from django.db.models import Count, Q, Max, Min
+        from django.contrib.auth.models import User
+        
+        user = request.user
+        
+        # 1. Aktiv route (konum izləmə)
+        active_route = Route.objects.filter(
+            user=user,
+            end_time__isnull=True
+        ).order_by('-start_time').first()
+        
+        active_route_data = None
+        if active_route:
+            # Son konum
+            last_location = LocationPoint.objects.filter(
+                route=active_route
+            ).order_by('-timestamp').first()
+            
+            # Konum nöqtələrinin sayı
+            location_count = LocationPoint.objects.filter(route=active_route).count()
+            
+            # Başlama zamanından indiyə qədər keçən vaxt
+            duration_seconds = (timezone.now() - active_route.start_time).total_seconds()
+            duration_minutes = int(duration_seconds / 60)
+            duration_hours = int(duration_minutes / 60)
+            
+            active_route_data = {
+                'id': active_route.id,
+                'start_time': active_route.start_time.isoformat(),
+                'start_time_formatted': active_route.start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'is_online': active_route.is_online,
+                'last_ping': active_route.last_ping.isoformat() if active_route.last_ping else None,
+                'last_ping_formatted': active_route.last_ping.strftime('%Y-%m-%d %H:%M:%S') if active_route.last_ping else None,
+                'last_location_time': active_route.last_location_time.isoformat() if active_route.last_location_time else None,
+                'last_location_time_formatted': active_route.last_location_time.strftime('%Y-%m-%d %H:%M:%S') if active_route.last_location_time else None,
+                'location_count': location_count,
+                'duration_seconds': int(duration_seconds),
+                'duration_minutes': duration_minutes,
+                'duration_hours': duration_hours,
+                'duration_formatted': f"{duration_hours}s {duration_minutes % 60}d",
+                'last_location': {
+                    'latitude': float(last_location.latitude) if last_location else None,
+                    'longitude': float(last_location.longitude) if last_location else None,
+                    'timestamp': last_location.timestamp.isoformat() if last_location else None,
+                    'timestamp_formatted': last_location.timestamp.strftime('%Y-%m-%d %H:%M:%S') if last_location else None,
+                } if last_location else None,
+            }
+        
+        # 2. Son 30 günün route-ları (konum başlatma/bağlama)
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        recent_routes = Route.objects.filter(
+            user=user,
+            start_time__gte=thirty_days_ago
+        ).order_by('-start_time')[:50]
+        
+        routes_data = []
+        for route in recent_routes:
+            duration_seconds = None
+            if route.end_time:
+                duration_seconds = (route.end_time - route.start_time).total_seconds()
+            elif active_route and route.id == active_route.id:
+                duration_seconds = (timezone.now() - route.start_time).total_seconds()
+            
+            routes_data.append({
+                'id': route.id,
+                'start_time': route.start_time.isoformat(),
+                'start_time_formatted': route.start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'end_time': route.end_time.isoformat() if route.end_time else None,
+                'end_time_formatted': route.end_time.strftime('%Y-%m-%d %H:%M:%S') if route.end_time else 'Aktiv',
+                'is_active': route.is_active,
+                'duration_seconds': int(duration_seconds) if duration_seconds else None,
+                'duration_minutes': int(duration_seconds / 60) if duration_seconds else None,
+                'duration_hours': int(duration_seconds / 3600) if duration_seconds else None,
+                'location_count': LocationPoint.objects.filter(route=route).count(),
+            })
+        
+        # 3. Görülən həkimlər (son 30 gün)
+        visited_doctors = VisitedDoctor.objects.filter(
+            user=user,
+            visit_date__gte=thirty_days_ago
+        ).order_by('-visit_date', '-created_at')[:50]
+        
+        visited_doctors_data = []
+        for doctor in visited_doctors:
+            visited_doctors_data.append({
+                'id': doctor.id,
+                'doctor_id': doctor.doctor_id,
+                'doctor_name': doctor.doctor_name,
+                'doctor_specialty': doctor.doctor_specialty,
+                'doctor_hospital': doctor.doctor_hospital,
+                'visit_date': doctor.visit_date.isoformat(),
+                'visit_date_formatted': doctor.visit_date.strftime('%Y-%m-%d %H:%M:%S'),
+                'created_at': doctor.created_at.isoformat(),
+                'created_at_formatted': doctor.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            })
+        
+        # 4. Planlamalar (visit schedules)
+        schedules = VisitSchedule.objects.filter(
+            user=user,
+            is_active=True
+        ).order_by('day_of_week', 'start_time')
+        
+        schedules_data = []
+        for schedule in schedules:
+            day_names = {
+                1: 'Bazar ertəsi',
+                2: 'Çərşənbə axşamı',
+                3: 'Çərşənbə',
+                4: 'Cümə axşamı',
+                5: 'Cümə',
+                6: 'Şənbə',
+                7: 'Bazar',
+            }
+            schedules_data.append({
+                'id': schedule.id,
+                'hospital_name': schedule.hospital_name,
+                'doctor_name': schedule.doctor_name,
+                'day_of_week': schedule.day_of_week,
+                'day_name': day_names.get(schedule.day_of_week, ''),
+                'start_time': schedule.start_time.strftime('%H:%M') if schedule.start_time else None,
+                'end_time': schedule.end_time.strftime('%H:%M') if schedule.end_time else None,
+                'notes': schedule.notes,
+                'created_at': schedule.created_at.isoformat(),
+                'created_at_formatted': schedule.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            })
+        
+        # 5. Konum icazəsi rədd etmələri (location permission reports)
+        location_reports = LocationPermissionReport.objects.filter(
+            user=user
+        ).order_by('-timestamp')[:20]
+        
+        location_reports_data = []
+        for report in location_reports:
+            location_reports_data.append({
+                'id': report.id,
+                'reason': report.reason,
+                'reason_display': report.get_reason_display(),
+                'reason_text': report.reason_text,
+                'timestamp': report.timestamp.isoformat(),
+                'timestamp_formatted': report.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            })
+        
+        # 6. Statistika
+        total_routes = Route.objects.filter(user=user).count()
+        total_locations = LocationPoint.objects.filter(route__user=user).count()
+        total_visited_doctors = VisitedDoctor.objects.filter(user=user).count()
+        total_schedules = VisitSchedule.objects.filter(user=user, is_active=True).count()
+        
+        # Son login zamanı (User model-dən)
+        # Qeyd: Django User model-də last_login var, amma bizim sistemdə JWT istifadə edirik
+        # Ona görə də bu məlumatı JWT token-dan və ya ayrıca model-dən götürmək lazımdır
+        # İndi sadəcə user.date_joined istifadə edək
+        
+        stats = {
+            'total_routes': total_routes,
+            'total_locations': total_locations,
+            'total_visited_doctors': total_visited_doctors,
+            'total_schedules': total_schedules,
+            'user_joined': user.date_joined.isoformat(),
+            'user_joined_formatted': user.date_joined.strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        
+        # 7. Real-time status
+        current_time = timezone.now()
+        realtime_status = {
+            'current_time': current_time.isoformat(),
+            'current_time_formatted': current_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'has_active_route': active_route is not None,
+            'is_online': active_route.is_online if active_route else False,
+        }
+        
+        return Response({
+            'success': True,
+            'data': {
+                'active_route': active_route_data,
+                'recent_routes': routes_data,
+                'visited_doctors': visited_doctors_data,
+                'schedules': schedules_data,
+                'location_reports': location_reports_data,
+                'stats': stats,
+                'realtime_status': realtime_status,
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"[DASHBOARD] Error in user_dashboard: {e}\nTraceback: {error_trace}")
+        return Response(
+            {'success': False, 'error': str(e), 'traceback': error_trace},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

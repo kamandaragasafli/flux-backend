@@ -260,6 +260,27 @@
             font-weight: 500;
         }
 
+        .stat-icon.orange {
+            background: rgba(249, 115, 22, 0.2);
+            color: #fb923c;
+        }
+
+        .stat-icon.teal {
+            background: rgba(45, 212, 191, 0.2);
+            color: #2dd4bf;
+        }
+
+        .stat-icon.red {
+            background: rgba(248, 113, 113, 0.2);
+            color: #f97373;
+        }
+
+        .stat-subtext {
+            margin-top: 6px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+        }
+
         .tab-btn:hover {
             background: rgba(255,255,255,0.05);
         }
@@ -911,6 +932,48 @@
                             <canvas id="locationsChart"></canvas>
                         </div>
                     </div>
+
+                    <!-- Visited Doctors Card -->
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon orange">
+                                <i class="fas fa-user-doctor"></i>
+                            </div>
+                            <div class="stat-label">Visited Doctors</div>
+                        </div>
+                        <div class="stat-value">{{ total_visited_doctors|default:0 }}</div>
+                        <div class="stat-subtext">
+                            Last 24h: {{ hospital_visits_last_24h|default:0 }} hospital visits
+                        </div>
+                    </div>
+
+                    <!-- Schedules Card -->
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon teal">
+                                <i class="fas fa-calendar-check"></i>
+                            </div>
+                            <div class="stat-label">Visit Schedules</div>
+                        </div>
+                        <div class="stat-value">{{ total_schedules|default:0 }}</div>
+                        <div class="stat-subtext">
+                            Active weekly plans
+                        </div>
+                    </div>
+
+                    <!-- Location Reports Card -->
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon red">
+                                <i class="fas fa-location-slash"></i>
+                            </div>
+                            <div class="stat-label">Location Reports</div>
+                        </div>
+                        <div class="stat-value">{{ total_location_reports|default:0 }}</div>
+                        <div class="stat-subtext">
+                            Last 24h: {{ location_reports_last_24h|default:0 }}
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Bottom Section -->
@@ -951,7 +1014,7 @@
                         {% endif %}
                     </div>
 
-                    <!-- Recent Activity Card -->
+                    <!-- Recent Activity Card (Routes + Location reports) -->
                     <div class="section-card">
                         <div class="section-header">
                             <div class="section-title">Recent Activity</div>
@@ -960,8 +1023,8 @@
                             <thead>
                                 <tr>
                                     <th>USER</th>
-                                    <th>STATUS</th>
-                                    <th>POINTS</th>
+                                    <th>EVENT</th>
+                                    <th>DETAIL</th>
                                     <th>TIME</th>
                                 </tr>
                             </thead>
@@ -969,20 +1032,26 @@
                                 {% for route in active_routes_list|slice:":5" %}
                                 <tr>
                                     <td>{{ route.user.username }}</td>
+                                    <td>Route Started</td>
+                                    <td>{{ route.points.count }} points</td>
+                                    <td>{{ route.start_time|date:"d.m.Y H:i" }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% for report in recent_location_reports|slice:":5" %}
+                                <tr>
+                                    <td>{{ report.user.username }}</td>
+                                    <td>Location Stopped</td>
                                     <td>
-                                        {% if route.is_paused %}
-                                        <span class="badge badge-warning">Paused</span>
-                                        {% else %}
-                                        <span class="badge badge-success">Active</span>
-                                        {% endif %}
+                                        {{ report.get_reason_display }}
                                     </td>
-                                    <td>{{ route.points.count }}</td>
-                                    <td>{{ route.start_time|date:"H:i" }}</td>
+                                    <td>{{ report.timestamp|date:"d.m.Y H:i:s" }}</td>
                                 </tr>
                                 {% empty %}
+                                {% if not active_routes_list %}
                                 <tr>
                                     <td colspan="4" style="text-align: center; color: rgba(255,255,255,0.5);">No recent activity</td>
                                 </tr>
+                                {% endif %}
                                 {% endfor %}
                             </tbody>
                         </table>

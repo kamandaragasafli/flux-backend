@@ -1,0 +1,57 @@
+{% extends "dashboard_base.html" %}
+
+{% block content %}
+<div class="dashboard-content">
+    <div class="performance-header">
+        <div class="performance-title">Location Tracking</div>
+        <div class="performance-main-title">Locations</div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">Recent Locations ({{ locations_last_24h }} last 24h)</div>
+        </div>
+        {% if recent_locations %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>USER</th>
+                        <th>COORDINATES</th>
+                        <th>TIME</th>
+                        <th>STATUS</th>
+                        <th>ROUTE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for location in recent_locations %}
+                    <tr>
+                        <td><strong>{{ location.route.user.username }}</strong></td>
+                        <td style="font-family: monospace; font-size: 12px;">
+                            {{ location.latitude }}, {{ location.longitude }}
+                        </td>
+                        <td>{{ location.timestamp|date:"d.m.Y H:i:s" }}</td>
+                        <td>
+                            {% if location.is_online %}
+                            <span class="badge badge-success">Online</span>
+                            {% else %}
+                            <span class="badge badge-danger">Offline</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge badge-info">#{{ location.route.id }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-map-marker-alt"></i>
+            <p>No locations found</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+

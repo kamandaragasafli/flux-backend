@@ -21,6 +21,12 @@ from .views import (
     NotificationCreateView,
     NotificationMarkReadView,
     NotificationDeleteView,
+    admin_dashboard_home,
+    admin_dashboard_users,
+    admin_dashboard_routes,
+    admin_dashboard_locations,
+    admin_dashboard_notifications,
+    admin_dashboard_map,
 )
 
 # Router for ViewSets
@@ -46,7 +52,13 @@ urlpatterns = [
     path("notifications/create/", NotificationCreateView.as_view(), name="notification-create"),
     path("notifications/<int:pk>/mark-read/", NotificationMarkReadView.as_view(), name="notification-mark-read"),
     path("notifications/<int:pk>/delete/", NotificationDeleteView.as_view(), name="notification-delete"),
-    path("dashboard/", views.admin_dashboard, name="dashboard"),
+    path("dashboard/", admin_dashboard_home, name="dashboard_home"),
+    path("dashboard/users/", admin_dashboard_users, name="dashboard_users"),
+    path("dashboard/routes/", admin_dashboard_routes, name="dashboard_routes"),
+    path("dashboard/locations/", admin_dashboard_locations, name="dashboard_locations"),
+    path("dashboard/notifications/", admin_dashboard_notifications, name="dashboard_notifications"),
+    path("dashboard/map/", admin_dashboard_map, name="dashboard_map"),
+    path("user-dashboard/", views.user_dashboard, name="user-dashboard"),
     # External data endpoints (Solvey Pharma)
     path("external/users/", views_external.external_users, name="external-users"),
     path("external/orders/", views_external.external_orders, name="external-orders"),
