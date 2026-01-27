@@ -14,6 +14,11 @@ DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
 # Server IP ve localhost için allowed hosts (Expo Go için)
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "206.189.53.174,localhost,127.0.0.1").split(",")
+CSRF_TRUSTED_ORIGINS = [
+    "http://206.189.53.174",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
