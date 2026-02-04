@@ -17,6 +17,8 @@ ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "206.189.53.174,localhost,127.
 CSRF_TRUSTED_ORIGINS = [
     "http://206.189.53.174",
     "https://206.189.53.174",
+    "http://206.189.53.174:8000",
+    "https://206.189.53.174:8000",
     "http://206.189.53.174:8081",
     "https://206.189.53.174:8081",
     "http://localhost:8000",

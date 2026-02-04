@@ -432,7 +432,7 @@ def is_staff_user(user):
 @user_passes_test(is_staff_user)
 def admin_dashboard_home(request):
     """Admin dashboard - ana səhifə"""
-
+    
     total_users = User.objects.count()
     active_users = User.objects.filter(routes__end_time__isnull=True).distinct().count()
     total_routes = Route.objects.count()
@@ -442,7 +442,7 @@ def admin_dashboard_home(request):
     total_visited_doctors = VisitedDoctor.objects.count()
     total_schedules = VisitSchedule.objects.count()
     total_location_reports = LocationPermissionReport.objects.count()
-
+    
     last_24h = timezone.now() - timedelta(hours=24)
     routes_last_24h = Route.objects.filter(start_time__gte=last_24h).count()
     locations_last_24h = LocationPoint.objects.filter(timestamp__gte=last_24h).count()
