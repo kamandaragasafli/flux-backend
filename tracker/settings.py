@@ -14,6 +14,8 @@ DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
 # Server IP ve localhost için allowed hosts (Expo Go için)
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "206.189.53.174,localhost,127.0.0.1").split(",")
+
+# CSRF_TRUSTED_ORIGINS - DÜZƏLDİLMİŞ
 CSRF_TRUSTED_ORIGINS = [
     "http://206.189.53.174",
     "https://206.189.53.174",
@@ -25,12 +27,15 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
 ]
 
-CSRF_COOKIE_SECURE = False
-SESSION_COOKIE_SECURE = False
-
-
+# CSRF ayarları - DÜZƏLDİLMİŞ
+CSRF_COOKIE_SECURE = False  # HTTPS-də True edin
+SESSION_COOKIE_SECURE = False  # HTTPS-də True edin
+CSRF_COOKIE_HTTPONLY = False  # JavaScript access üçün
+CSRF_USE_SESSIONS = False
 CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_DOMAIN = None
+CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # CSRF xətaları üçün
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -107,13 +112,6 @@ else:
     }
 
 # External Database Configuration (İkinci database - isteğe bağlı)
-# Eğer external database kullanmak istiyorsanız, .env dosyasına ekleyin:
-# USE_EXTERNAL_DB=true
-# EXTERNAL_DB_NAME=external_db_name
-# EXTERNAL_DB_USER=external_user
-# EXTERNAL_DB_PASSWORD=external_password
-# EXTERNAL_DB_HOST=external_host
-# EXTERNAL_DB_PORT=5432
 USE_EXTERNAL_DB = os.getenv("USE_EXTERNAL_DB", "false").lower() == "true"
 
 if USE_EXTERNAL_DB:
@@ -129,7 +127,7 @@ if USE_EXTERNAL_DB:
         },
     }
 
-# Database Router (hangi model hangi database'i kullanacak)
+# Database Router
 DATABASE_ROUTERS = ['tracking.db_router.ExternalDatabaseRouter']
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -181,10 +179,10 @@ SIMPLE_JWT = {
 }
 
 # CORS ayarları
-# Expo Go için tüm origin'lere izin ver (Expo Go farklı IP'lerden bağlanabilir)
+# Expo Go için tüm origin'lere izin ver
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "true").lower() == "true"
 
-# Eğer CORS_ALLOW_ALL_ORIGINS false ise, spesifik origin'ler ekleyin
+# Spesifik origin'ler
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8081",
     "http://localhost:8082",
@@ -230,4 +228,3 @@ if not DEBUG:
 
 # WhiteNoise settings for static files
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-
