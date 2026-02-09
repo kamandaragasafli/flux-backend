@@ -1211,16 +1211,57 @@ def get_medicines(request):
     """
     try:
         logger.info("[SOLVEY_MEDICINES] Starting get_medicines")
-        # Solvey database-dən dərmanları çək
-        medicines = SolveyMedicine.objects.using('external').filter(status=True).order_by('med_name')
-        logger.info(f"[SOLVEY_MEDICINES] Found {medicines.count()} medicines")
+        
+        # Cədvəl adını environment variable-dan al
+        import os
+        medicines_table = os.getenv('SOLVEY_MEDICINES_TABLE', 'tracking_medical')
+        
+        # Raw SQL query ilə dərmanları çək
+        from django.db import connections
+        with connections['external'].cursor() as cursor:
+            # Əvvəlcə cədvəlin mövcud olub-olmadığını yoxla
+            cursor.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND (table_name = %s OR table_name = %s OR table_name = %s OR table_name = %s)
+                LIMIT 1
+            """, ['medical', 'tracking_medical', 'medicines', 'tracking_medicines'])
+            
+            table_row = cursor.fetchone()
+            if table_row:
+                actual_table_name = table_row[0]
+                logger.info(f"[SOLVEY_MEDICINES] Found table: {actual_table_name}")
+            else:
+                # Cədvəl tapılmadı, boş siyahı qaytar
+                logger.warning(f"[SOLVEY_MEDICINES] Medicine table not found. Tried: medical, tracking_medical, medicines, tracking_medicines")
+                return Response({
+                    'success': True,
+                    'count': 0,
+                    'data': [],
+                    'message': 'Dərmanlar cədvəli tapılmadı'
+                })
+            
+            # Dərmanları çək
+            cursor.execute(f"""
+                SELECT id, med_name, med_full_name, med_price, komissiya, status
+                FROM "{actual_table_name}"
+                WHERE status = true
+                ORDER BY med_name
+            """)
+            
+            columns = [col[0] for col in cursor.description]
+            medicines_data = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        logger.info(f"[SOLVEY_MEDICINES] Found {len(medicines_data)} medicines")
         
         data = []
-        for med in medicines:
+        for med in medicines_data:
+            med_id = med['id']
             # Local Medicine modelindən annotasiya məlumatını çək
             annotation_data = {}
             try:
-                local_medicine = Medicine.objects.filter(solvey_id=med.id).first()
+                local_medicine = Medicine.objects.filter(solvey_id=med_id).first()
                 if local_medicine:
                     annotation_data = {
                         'annotation': local_medicine.annotation or '',
@@ -1235,15 +1276,15 @@ def get_medicines(request):
                         'image': local_medicine.image.url if local_medicine.image else None,
                     }
             except Exception as e:
-                logger.warning(f"[SOLVEY_MEDICINES] Could not fetch local annotation for medicine {med.id}: {e}")
+                logger.warning(f"[SOLVEY_MEDICINES] Could not fetch local annotation for medicine {med_id}: {e}")
             
             data.append({
-                'id': med.id,
-                'name': med.med_name or '',
-                'name_az': med.med_full_name or med.med_name or '',
-                'price': float(med.med_price) if med.med_price else None,
-                'komissiya': float(med.komissiya) if med.komissiya else None,
-                'description': med.med_full_name or med.med_name or '',
+                'id': med_id,
+                'name': med.get('med_name') or '',
+                'name_az': med.get('med_full_name') or med.get('med_name') or '',
+                'price': float(med['med_price']) if med.get('med_price') else None,
+                'komissiya': float(med['komissiya']) if med.get('komissiya') else None,
+                'description': med.get('med_full_name') or med.get('med_name') or '',
                 'annotation': annotation_data.get('annotation', ''),
                 'active_ingredient': annotation_data.get('active_ingredient', ''),
                 'dosage': annotation_data.get('dosage', ''),
@@ -1254,7 +1295,7 @@ def get_medicines(request):
                 'manufacturer': annotation_data.get('manufacturer', ''),
                 'barcode': annotation_data.get('barcode', ''),
                 'image': annotation_data.get('image'),
-                'is_active': med.status,
+                'is_active': med.get('status', True),
             })
         
         logger.info(f"[SOLVEY_MEDICINES] Returning {len(data)} medicines")
@@ -1284,8 +1325,44 @@ def get_medicine_detail(request, medicine_id):
     """
     try:
         logger.info(f"[SOLVEY_MEDICINES] Fetching medicine detail for ID: {medicine_id}")
-        # Solvey database-dən dərmanı çək
-        med = SolveyMedicine.objects.using('external').get(id=medicine_id, status=True)
+        
+        # Cədvəl adını tap
+        import os
+        from django.db import connections
+        with connections['external'].cursor() as cursor:
+            cursor.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND (table_name = %s OR table_name = %s OR table_name = %s OR table_name = %s)
+                LIMIT 1
+            """, ['medical', 'tracking_medical', 'medicines', 'tracking_medicines'])
+            
+            table_row = cursor.fetchone()
+            if not table_row:
+                return Response({
+                    'success': False,
+                    'error': 'Dərmanlar cədvəli tapılmadı'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            actual_table_name = table_row[0]
+            
+            # Dərmanı çək
+            cursor.execute(f"""
+                SELECT id, med_name, med_full_name, med_price, komissiya, status
+                FROM "{actual_table_name}"
+                WHERE id = %s AND status = true
+            """, [medicine_id])
+            
+            med_row = cursor.fetchone()
+            if not med_row:
+                return Response({
+                    'success': False,
+                    'error': 'Dərman tapılmadı'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            columns = [col[0] for col in cursor.description]
+            med = dict(zip(columns, med_row))
         
         # Əgər annotasiya bizim Medicine modelində varsa, onu da çək
         annotation_data = ''
@@ -1297,12 +1374,12 @@ def get_medicine_detail(request, medicine_id):
             logger.warning(f"[SOLVEY_MEDICINES] Could not fetch local annotation: {e}")
         
         data = {
-            'id': med.id,
-            'name': med.med_name or '',
-            'name_az': med.med_full_name or med.med_name or '',
-            'price': float(med.med_price) if med.med_price else None,
-            'komissiya': float(med.komissiya) if med.komissiya else None,
-            'description': med.med_full_name or med.med_name or '',
+            'id': med['id'],
+            'name': med.get('med_name') or '',
+            'name_az': med.get('med_full_name') or med.get('med_name') or '',
+            'price': float(med['med_price']) if med.get('med_price') else None,
+            'komissiya': float(med['komissiya']) if med.get('komissiya') else None,
+            'description': med.get('med_full_name') or med.get('med_name') or '',
             'annotation': annotation_data,  # Annotasiya bizim Medicine modelindən gəlir
             'active_ingredient': '',
             'dosage': '',
@@ -1313,7 +1390,7 @@ def get_medicine_detail(request, medicine_id):
             'manufacturer': '',
             'barcode': '',
             'image': None,
-            'is_active': med.status,
+            'is_active': med.get('status', True),
         }
         
         # Əgər local Medicine modelində məlumat varsa, onu da əlavə et
@@ -1340,12 +1417,6 @@ def get_medicine_detail(request, medicine_id):
             'success': True,
             'data': data
         })
-    except SolveyMedicine.DoesNotExist:
-        logger.warning(f"[SOLVEY_MEDICINES] Medicine {medicine_id} not found")
-        return Response({
-            'success': False,
-            'error': 'Dərman tapılmadı'
-        }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
