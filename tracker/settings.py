@@ -227,4 +227,8 @@ if not DEBUG:
     X_FRAME_OPTIONS = "DENY"
 
 # WhiteNoise settings for static files
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# Settings.py-nin sonunda
+if not DEBUG:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+else:
+    STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
