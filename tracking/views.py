@@ -816,6 +816,14 @@ def get_solvey_doctors(request):
                 degree_value = str(derece_value).strip() if derece_value else ''
                 vip_value = ''
             
+            # Əvvəlki borc məlumatını al
+            previous_debt_value = None
+            try:
+                if hasattr(d, 'previous_debt') and d.previous_debt is not None:
+                    previous_debt_value = float(d.previous_debt)
+            except (AttributeError, ValueError, TypeError):
+                previous_debt_value = None
+            
             data.append({
                 'id': d.id,
                 'name': d.ad or '',
@@ -828,7 +836,8 @@ def get_solvey_doctors(request):
                 'city_id': d.city_id,
                 'hospital_id': d.klinika_id,
                 'hospital': hospital_name,
-                'phone': (d.number or '').strip()
+                'phone': (d.number or '').strip(),
+                'previous_debt': previous_debt_value  # Əvvəlki borc
             })
         logger.info(f"[SOLVEY_DOCTORS] Returning {len(data)} doctors")
         return Response({'success': True, 'data': data})

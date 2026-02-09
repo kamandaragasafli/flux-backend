@@ -64,6 +64,7 @@ class SolveyDoctor(models.Model):
     bolge_id = models.IntegerField(null=True, blank=True)
     city_id = models.IntegerField(null=True, blank=True)
     klinika_id = models.IntegerField(null=True, blank=True)
+    previous_debt = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Əvvəlki borc
     
     class Meta:
         db_table = 'doctors_doctors'
