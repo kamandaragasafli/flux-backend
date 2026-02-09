@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 
-from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification
+from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification, Medicine
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -267,3 +267,30 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = '__all__'
         read_only_fields = ('user', 'created_at')
+
+
+class MedicineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Medicine
+        fields = [
+            'id',
+            'solvey_id',
+            'name',
+            'name_az',
+            'description',
+            'annotation',
+            'active_ingredient',
+            'dosage',
+            'indications',
+            'contraindications',
+            'side_effects',
+            'storage_conditions',
+            'manufacturer',
+            'barcode',
+            'image',
+            'is_active',
+            'order',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

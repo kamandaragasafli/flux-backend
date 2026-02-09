@@ -23,8 +23,9 @@ from .models import (
     Notification,
     VisitedDoctor,
     LocationPermissionReport,
+    Medicine,
 )
-from .models_solvey import SolveyRegion, SolveyCity, SolveyHospital, SolveyDoctor
+from .models_solvey import SolveyRegion, SolveyCity, SolveyHospital, SolveyDoctor, SolveyMedicine
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
@@ -36,6 +37,7 @@ from .serializers import (
     HospitalVisitSerializer,
     UserProfileSerializer,
     NotificationSerializer,
+    MedicineSerializer,
 )
 
 # SSL uyarılarını bastır (development için)
@@ -1198,3 +1200,159 @@ def user_dashboard(request):
             {'success': False, 'error': str(e), 'traceback': error_trace},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_medicines(request):
+    """
+    Solvey database-dən aktiv dərmanların siyahısını qaytarır
+    GET /api/medicines/
+    """
+    try:
+        logger.info("[SOLVEY_MEDICINES] Starting get_medicines")
+        # Solvey database-dən dərmanları çək
+        medicines = SolveyMedicine.objects.using('external').filter(status=True).order_by('med_name')
+        logger.info(f"[SOLVEY_MEDICINES] Found {medicines.count()} medicines")
+        
+        data = []
+        for med in medicines:
+            # Local Medicine modelindən annotasiya məlumatını çək
+            annotation_data = {}
+            try:
+                local_medicine = Medicine.objects.filter(solvey_id=med.id).first()
+                if local_medicine:
+                    annotation_data = {
+                        'annotation': local_medicine.annotation or '',
+                        'active_ingredient': local_medicine.active_ingredient or '',
+                        'dosage': local_medicine.dosage or '',
+                        'indications': local_medicine.indications or '',
+                        'contraindications': local_medicine.contraindications or '',
+                        'side_effects': local_medicine.side_effects or '',
+                        'storage_conditions': local_medicine.storage_conditions or '',
+                        'manufacturer': local_medicine.manufacturer or '',
+                        'barcode': local_medicine.barcode or '',
+                        'image': local_medicine.image.url if local_medicine.image else None,
+                    }
+            except Exception as e:
+                logger.warning(f"[SOLVEY_MEDICINES] Could not fetch local annotation for medicine {med.id}: {e}")
+            
+            data.append({
+                'id': med.id,
+                'name': med.med_name or '',
+                'name_az': med.med_full_name or med.med_name or '',
+                'price': float(med.med_price) if med.med_price else None,
+                'komissiya': float(med.komissiya) if med.komissiya else None,
+                'description': med.med_full_name or med.med_name or '',
+                'annotation': annotation_data.get('annotation', ''),
+                'active_ingredient': annotation_data.get('active_ingredient', ''),
+                'dosage': annotation_data.get('dosage', ''),
+                'indications': annotation_data.get('indications', ''),
+                'contraindications': annotation_data.get('contraindications', ''),
+                'side_effects': annotation_data.get('side_effects', ''),
+                'storage_conditions': annotation_data.get('storage_conditions', ''),
+                'manufacturer': annotation_data.get('manufacturer', ''),
+                'barcode': annotation_data.get('barcode', ''),
+                'image': annotation_data.get('image'),
+                'is_active': med.status,
+            })
+        
+        logger.info(f"[SOLVEY_MEDICINES] Returning {len(data)} medicines")
+        return Response({
+            'success': True,
+            'count': len(data),
+            'data': data
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"[SOLVEY_MEDICINES] Error fetching medicines: {e}")
+        logger.error(f"[SOLVEY_MEDICINES] Traceback: {error_trace}")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': error_trace
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_medicine_detail(request, medicine_id):
+    """
+    Solvey database-dən dərmanın detallı məlumatını qaytarır
+    GET /api/medicines/{id}/
+    """
+    try:
+        logger.info(f"[SOLVEY_MEDICINES] Fetching medicine detail for ID: {medicine_id}")
+        # Solvey database-dən dərmanı çək
+        med = SolveyMedicine.objects.using('external').get(id=medicine_id, status=True)
+        
+        # Əgər annotasiya bizim Medicine modelində varsa, onu da çək
+        annotation_data = ''
+        try:
+            local_medicine = Medicine.objects.filter(solvey_id=medicine_id).first()
+            if local_medicine:
+                annotation_data = local_medicine.annotation or ''
+        except Exception as e:
+            logger.warning(f"[SOLVEY_MEDICINES] Could not fetch local annotation: {e}")
+        
+        data = {
+            'id': med.id,
+            'name': med.med_name or '',
+            'name_az': med.med_full_name or med.med_name or '',
+            'price': float(med.med_price) if med.med_price else None,
+            'komissiya': float(med.komissiya) if med.komissiya else None,
+            'description': med.med_full_name or med.med_name or '',
+            'annotation': annotation_data,  # Annotasiya bizim Medicine modelindən gəlir
+            'active_ingredient': '',
+            'dosage': '',
+            'indications': '',
+            'contraindications': '',
+            'side_effects': '',
+            'storage_conditions': '',
+            'manufacturer': '',
+            'barcode': '',
+            'image': None,
+            'is_active': med.status,
+        }
+        
+        # Əgər local Medicine modelində məlumat varsa, onu da əlavə et
+        try:
+            local_medicine = Medicine.objects.filter(solvey_id=medicine_id).first()
+            if local_medicine:
+                data.update({
+                    'annotation': local_medicine.annotation or '',
+                    'active_ingredient': local_medicine.active_ingredient or '',
+                    'dosage': local_medicine.dosage or '',
+                    'indications': local_medicine.indications or '',
+                    'contraindications': local_medicine.contraindications or '',
+                    'side_effects': local_medicine.side_effects or '',
+                    'storage_conditions': local_medicine.storage_conditions or '',
+                    'manufacturer': local_medicine.manufacturer or '',
+                    'barcode': local_medicine.barcode or '',
+                    'image': local_medicine.image.url if local_medicine.image else None,
+                })
+        except Exception as e:
+            logger.warning(f"[SOLVEY_MEDICINES] Could not fetch local medicine data: {e}")
+        
+        logger.info(f"[SOLVEY_MEDICINES] Returning medicine detail for ID: {medicine_id}")
+        return Response({
+            'success': True,
+            'data': data
+        })
+    except SolveyMedicine.DoesNotExist:
+        logger.warning(f"[SOLVEY_MEDICINES] Medicine {medicine_id} not found")
+        return Response({
+            'success': False,
+            'error': 'Dərman tapılmadı'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"[SOLVEY_MEDICINES] Error fetching medicine {medicine_id}: {e}")
+        logger.error(f"[SOLVEY_MEDICINES] Traceback: {error_trace}")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': error_trace
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

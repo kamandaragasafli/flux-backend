@@ -238,6 +238,37 @@ class VisitedDoctor(models.Model):
         return f"{self.user.username} - {self.doctor_name} ({self.visit_date.date()})"
 
 
+class Medicine(models.Model):
+    """Dərman annotasiyaları - tərkib və istifadə qaydaları"""
+    
+    solvey_id = models.IntegerField(null=True, blank=True, unique=True, verbose_name="Solvey Database ID", help_text="Solvey database-dəki dərman ID-si")
+    name = models.CharField(max_length=255, verbose_name="Dərman adı")
+    name_az = models.CharField(max_length=255, blank=True, verbose_name="Dərman adı (Azərbaycan)")
+    description = models.TextField(verbose_name="Qısa təsvir", blank=True)
+    annotation = models.TextField(verbose_name="Annotasiya (tərkib, istifadə qaydaları)", help_text="2 A4 vərəqi boyda məlumat")
+    active_ingredient = models.CharField(max_length=500, blank=True, verbose_name="Aktiv tərkib")
+    dosage = models.CharField(max_length=255, blank=True, verbose_name="Doza")
+    indications = models.TextField(blank=True, verbose_name="Göstərişlər")
+    contraindications = models.TextField(blank=True, verbose_name="Qadağalar")
+    side_effects = models.TextField(blank=True, verbose_name="Yan təsirlər")
+    storage_conditions = models.CharField(max_length=255, blank=True, verbose_name="Saxlama şəraiti")
+    manufacturer = models.CharField(max_length=255, blank=True, verbose_name="İstehsalçı")
+    barcode = models.CharField(max_length=100, blank=True, verbose_name="Barkod")
+    image = models.ImageField(upload_to='medicines/', blank=True, null=True, verbose_name="Şəkil")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    order = models.IntegerField(default=0, verbose_name="Sıra")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = "Dərman"
+        verbose_name_plural = "Dərmanlar"
+    
+    def __str__(self) -> str:
+        return self.name or self.name_az
+
+
 class LocationPermissionReport(models.Model):
     """Konum icazəsi rədd edildikdə istifadəçinin səbəb bildirməsi"""
     

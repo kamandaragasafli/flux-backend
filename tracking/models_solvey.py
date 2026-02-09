@@ -74,3 +74,22 @@ class SolveyDoctor(models.Model):
     def __str__(self):
         return self.ad
 
+
+class SolveyMedicine(models.Model):
+    """Solvey Medical cədvəli"""
+    id = models.IntegerField(primary_key=True)
+    med_name = models.CharField(max_length=250)
+    med_full_name = models.CharField(max_length=250, null=True, blank=True)
+    med_price = models.DecimalField(max_digits=10, decimal_places=2)
+    komissiya = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.BooleanField(default=True)
+    
+    class Meta:
+        # Cədvəl adı environment variable-dan alınacaq, default: 'medical'
+        db_table = 'medical'
+        managed = False
+        app_label = 'tracking'
+    
+    def __str__(self):
+        return self.med_name or self.med_full_name or f"Medicine {self.id}"
+
