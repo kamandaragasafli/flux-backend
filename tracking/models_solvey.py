@@ -85,9 +85,8 @@ class SolveyMedicine(models.Model):
     status = models.BooleanField(default=True)
     
     class Meta:
-        # Cədvəl adı environment variable-dan alınacaq, default: 'tracking_medical' və ya 'medical'
-        # Django model adına görə cədvəl adı tracking_medical ola bilər
-        db_table = 'tracking_medical'  # Əvvəlcə tracking_medical yoxla
+        # Cədvəl adı: medicine_medical
+        db_table = 'medicine_medical'
         managed = False
         app_label = 'tracking'
     

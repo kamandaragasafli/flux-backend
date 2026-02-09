@@ -1218,15 +1218,18 @@ def get_medicines(request):
         
         # Raw SQL query ilə dərmanları çək
         from django.db import connections
+        import os
+        medicines_table = os.getenv('SOLVEY_MEDICINES_TABLE', 'medicine_medical')
+        
         with connections['external'].cursor() as cursor:
             # Əvvəlcə cədvəlin mövcud olub-olmadığını yoxla
             cursor.execute("""
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = 'public' 
-                AND (table_name = %s OR table_name = %s OR table_name = %s OR table_name = %s)
+                AND (table_name = %s OR table_name = %s OR table_name = %s OR table_name = %s OR table_name = %s)
                 LIMIT 1
-            """, ['medical', 'tracking_medical', 'medicines', 'tracking_medicines'])
+            """, [medicines_table, 'medicine_medical', 'medical', 'tracking_medical', 'medicines'])
             
             table_row = cursor.fetchone()
             if table_row:
@@ -1234,7 +1237,7 @@ def get_medicines(request):
                 logger.info(f"[SOLVEY_MEDICINES] Found table: {actual_table_name}")
             else:
                 # Cədvəl tapılmadı, boş siyahı qaytar
-                logger.warning(f"[SOLVEY_MEDICINES] Medicine table not found. Tried: medical, tracking_medical, medicines, tracking_medicines")
+                logger.warning(f"[SOLVEY_MEDICINES] Medicine table not found. Tried: {medicines_table}, medicine_medical, medical, tracking_medical, medicines")
                 return Response({
                     'success': True,
                     'count': 0,
@@ -1329,14 +1332,16 @@ def get_medicine_detail(request, medicine_id):
         # Cədvəl adını tap
         import os
         from django.db import connections
+        medicines_table = os.getenv('SOLVEY_MEDICINES_TABLE', 'medicine_medical')
+        
         with connections['external'].cursor() as cursor:
             cursor.execute("""
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = 'public' 
-                AND (table_name = %s OR table_name = %s OR table_name = %s OR table_name = %s)
+                AND (table_name = %s OR table_name = %s OR table_name = %s OR table_name = %s OR table_name = %s)
                 LIMIT 1
-            """, ['medical', 'tracking_medical', 'medicines', 'tracking_medicines'])
+            """, [medicines_table, 'medicine_medical', 'medical', 'tracking_medical', 'medicines'])
             
             table_row = cursor.fetchone()
             if not table_row:
