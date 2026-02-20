@@ -148,18 +148,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const mapEl = document.getElementById("map");
   const userListEl = document.getElementById("mapUserList");
-  const apiBase = window.DASHBOARD_API_BASE || window.location.origin;
 
   function setMapUserListError(msg) {
     if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">' + msg + "</div>";
   }
 
-  if (!window.L) {
-    setTimeout(function () {
-      if (!window.L) setMapUserListError("Xəritə kitabxanası yüklənə bilmədi. Zəhmət olmasa səhifəni yeniləyin.");
-    }, 3000);
-  }
-  if (mapEl && window.L) {
+  function initMap() {
+    if (!mapEl || !window.L) return false;
     let map = L.map("map", { zoomControl: false }).setView([40.4093, 49.8671], 11);
     L.control.zoom({ position: "topright" }).addTo(map);
     let markers = {};
@@ -195,7 +190,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     async function loadMapLocations() {
       try {
-        const url = apiBase + "/api/movqe-son-json/";
+        const url = "/api/movqe-son-json/";
         const res = await fetch(url, {
           credentials: "same-origin",
           headers: { "X-CSRFToken": getCSRFToken() || "" },
@@ -233,7 +228,7 @@ document.addEventListener("DOMContentLoaded", function () {
           markers[f.id] = m;
 
           try {
-            const rRes = await fetch(apiBase + "/api/routes/?user=" + f.id, {
+            const rRes = await fetch("/api/routes/?user=" + f.id, {
               credentials: "same-origin",
               headers: { "X-CSRFToken": csrf || "" },
             });
@@ -300,6 +295,19 @@ document.addEventListener("DOMContentLoaded", function () {
 
     loadMapLocations();
     setInterval(loadMapLocations, 10000);
+    setTimeout(function () { if (map && map.invalidateSize) map.invalidateSize(); }, 500);
+    return true;
+  }
+
+  if (!window.L) {
+    var waitCount = 0;
+    var waitL = setInterval(function () {
+      waitCount++;
+      if (window.L) { clearInterval(waitL); initMap(); }
+      else if (waitCount > 50) { clearInterval(waitL); setMapUserListError("Xəritə kitabxanası yüklənə bilmədi."); }
+    }, 100);
+  } else {
+    initMap();
   }
 });
 
