@@ -6,6 +6,11 @@
         <div class="performance-title">Günlük görülən həkimlər</div>
         <div class="performance-main-title">Görülən həkimlər</div>
     </div>
+    <div style="display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;">
+        <a href="?filter=today" style="padding: 8px 16px; border-radius: 8px; text-decoration: none; font-size: 14px; {% if filter_param == 'today' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Bu gün</a>
+        <a href="?filter=week" style="padding: 8px 16px; border-radius: 8px; text-decoration: none; font-size: 14px; {% if filter_param == 'week' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Bu həftə</a>
+        <a href="?filter=all" style="padding: 8px 16px; border-radius: 8px; text-decoration: none; font-size: 14px; {% if filter_param == 'all' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Hamısı</a>
+    </div>
 
     <div class="stats-grid" style="margin-bottom: 24px;">
         <div class="stat-card">
@@ -49,7 +54,7 @@
                         <td><strong>{{ u.username }}</strong></td>
                         <td>{{ u.visited_count }}</td>
                         <td>
-                            <a href="{% url 'dashboard_visited_doctors_user' u.id %}" style="color:#3b82f6;text-decoration:none;"><i class="fas fa-eye"></i> Bax</a>
+                            <a href="{% url 'dashboard_visited_doctors_user' u.id %}?filter={{ filter_param }}" style="color:#3b82f6;text-decoration:none;"><i class="fas fa-eye"></i> Bax</a>
                         </td>
                     </tr>
                     {% endfor %}

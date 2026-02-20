@@ -603,69 +603,134 @@ def admin_dashboard_reports(request):
     return render(request, "dashboard_reports.html", context)
 
 
+def _get_date_filter_threshold(filter_param):
+    """filter: 'today' | 'week' | 'all' -> (start_date or None)"""
+    from datetime import timedelta
+    now = timezone.now()
+    if filter_param == "today":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if filter_param == "week":
+        week_start = now - timedelta(days=now.weekday())
+        return week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    return None
+
+
 @user_passes_test(is_staff_user)
 def admin_dashboard_visited_doctors(request):
-    """Görülən həkimlər – istifadəçi siyahısı (hər birinin öz səhifəsinə keçid)"""
-    users_with_count = (
-        User.objects.annotate(visited_count=Count("visited_doctors"))
-        .filter(visited_count__gt=0)
-        .order_by("-visited_count")
-    )
-    total_visits = VisitedDoctor.objects.count()
+    """Görülən həkimlər – istifadəçi siyahısı (filter: bu gün / bu həftə / hamısı)"""
+    filter_param = request.GET.get("filter", "today")
+    if filter_param not in ("today", "week", "all"):
+        filter_param = "today"
+
+    threshold = _get_date_filter_threshold(filter_param)
+    if threshold is not None:
+        users_with_count = (
+            User.objects.annotate(
+                visited_count=Count("visited_doctors", filter=Q(visited_doctors__visit_date__gte=threshold))
+            )
+            .filter(visited_count__gt=0)
+            .order_by("-visited_count")
+        )
+        total_visits = VisitedDoctor.objects.filter(visit_date__gte=threshold).count()
+    else:
+        users_with_count = (
+            User.objects.annotate(visited_count=Count("visited_doctors"))
+            .filter(visited_count__gt=0)
+            .order_by("-visited_count")
+        )
+        total_visits = VisitedDoctor.objects.count()
     context = {
         "active_page": "visited_doctors",
         "users_with_count": users_with_count,
         "total_visits": total_visits,
+        "filter_param": filter_param,
     }
     return render(request, "dashboard_visited_doctors.html", context)
 
 
 @user_passes_test(is_staff_user)
 def admin_dashboard_visited_doctors_user(request, user_id):
-    """Bir istifadəçinin görülən həkimləri – cədvəl və Excel export"""
+    """Bir istifadəçinin görülən həkimləri – filter, cədvəl və Excel export"""
     user = get_object_or_404(User, id=user_id)
     export = request.GET.get("export") == "excel"
+    filter_param = request.GET.get("filter", "today")
+    if filter_param not in ("today", "week", "all"):
+        filter_param = "today"
 
     visited_doctors = VisitedDoctor.objects.filter(user=user).order_by("-visit_date")
+    threshold = _get_date_filter_threshold(filter_param)
+    if threshold is not None:
+        visited_doctors = visited_doctors.filter(visit_date__gte=threshold)
     total = visited_doctors.count()
 
     if export:
-        from openpyxl import Workbook
-        from io import BytesIO
+        try:
+            from openpyxl import Workbook
+            from openpyxl.utils import get_column_letter
+            from io import BytesIO
+            import re
 
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Görülən həkimlər"
-        headers = ["Tarix / Saat", "Həkim adı", "İxtisas", "Xəstəxana"]
-        ws.append(headers)
-        for vd in visited_doctors:
-            ws.append([
-                vd.visit_date.strftime("%d.%m.%Y %H:%M") if vd.visit_date else "",
-                vd.doctor_name or "",
-                vd.doctor_specialty or "",
-                vd.doctor_hospital or "",
-            ])
-        from openpyxl.utils import get_column_letter
-        for col in range(1, len(headers) + 1):
-            ws.column_dimensions[get_column_letter(col)].width = 22
-        bio = BytesIO()
-        wb.save(bio)
-        bio.seek(0)
-        filename = f"gorulen-hekimler-{user.username}-{timezone.now().strftime('%Y%m%d')}.xlsx"
-        response = HttpResponse(
-            bio.getvalue(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return response
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "VisitedDoctors"[:31]
+            headers = ["Tarix / Saat", "Həkim adı", "İxtisas", "Xəstəxana"]
+            ws.append(headers)
+            for vd in visited_doctors:
+                ws.append([
+                    vd.visit_date.strftime("%d.%m.%Y %H:%M") if vd.visit_date else "",
+                    str(vd.doctor_name or ""),
+                    str(vd.doctor_specialty or ""),
+                    str(vd.doctor_hospital or ""),
+                ])
+            for col in range(1, len(headers) + 1):
+                ws.column_dimensions[get_column_letter(col)].width = 22
+            bio = BytesIO()
+            wb.save(bio)
+            bio.seek(0)
+            safe_username = re.sub(r"[^\w\-.]", "_", str(user.username))[:50]
+            filename = f"gorulen-hekimler-{safe_username}-{timezone.now().strftime('%Y%m%d')}.xlsx"
+            response = HttpResponse(
+                bio.getvalue(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return response
+        except Exception as exc:
+            logger.exception("[VISITED_DOCTORS] Excel export error")
+            context = {
+                "active_page": "visited_doctors",
+                "profile_user": user,
+                "visited_doctors": visited_doctors,
+                "total": total,
+                "filter_param": filter_param,
+                "export_error": str(exc),
+            }
+            return render(request, "dashboard_visited_doctors_user.html", context)
 
     context = {
         "active_page": "visited_doctors",
         "profile_user": user,
         "visited_doctors": visited_doctors,
         "total": total,
+        "filter_param": filter_param,
     }
     return render(request, "dashboard_visited_doctors_user.html", context)
+
+
+def cron_reset_visited_doctors(request):
+    """
+    Görülən həkimləri günlük sıfırla. Cron ilə çağırılır.
+    GET /api/cron/reset-visited-doctors/?token=SECRET
+    """
+    from django.conf import settings
+    from django.http import JsonResponse
+
+    token = request.GET.get("token") or request.headers.get("X-Cron-Token")
+    expected = getattr(settings, "CRON_SECRET", None) or os.environ.get("CRON_SECRET", "")
+    if not expected or token != expected:
+        return JsonResponse({"ok": False, "error": "Unauthorized"}, status=401)
+    deleted, _ = VisitedDoctor.objects.all().delete()
+    return JsonResponse({"ok": True, "deleted": deleted})
 
 
 class VisitScheduleViewSet(viewsets.ModelViewSet):

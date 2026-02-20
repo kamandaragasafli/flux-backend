@@ -148,6 +148,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const mapEl = document.getElementById("map");
   const userListEl = document.getElementById("mapUserList");
+  const apiBase = window.DASHBOARD_API_BASE || window.location.origin;
+
+  function setMapUserListError(msg) {
+    if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">' + msg + "</div>";
+  }
+
+  if (!window.L) {
+    setTimeout(function () {
+      if (!window.L) setMapUserListError("Xəritə kitabxanası yüklənə bilmədi. Zəhmət olmasa səhifəni yeniləyin.");
+    }, 3000);
+  }
   if (mapEl && window.L) {
     let map = L.map("map", { zoomControl: false }).setView([40.4093, 49.8671], 11);
     L.control.zoom({ position: "topright" }).addTo(map);
@@ -184,7 +195,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     async function loadMapLocations() {
       try {
-        const res = await fetch("/api/movqe-son-json/", {
+        const url = apiBase + "/api/movqe-son-json/";
+        const res = await fetch(url, {
           credentials: "same-origin",
           headers: { "X-CSRFToken": getCSRFToken() || "" },
         });
@@ -221,7 +233,7 @@ document.addEventListener("DOMContentLoaded", function () {
           markers[f.id] = m;
 
           try {
-            const rRes = await fetch(`/api/routes/?user=${f.id}`, {
+            const rRes = await fetch(apiBase + "/api/routes/?user=" + f.id, {
               credentials: "same-origin",
               headers: { "X-CSRFToken": csrf || "" },
             });

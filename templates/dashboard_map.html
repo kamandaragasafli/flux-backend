@@ -1,6 +1,9 @@
 {% extends "dashboard_base.html" %}
 
 {% block content %}
+<script>
+  window.DASHBOARD_API_BASE = "{{ request.scheme }}://{{ request.get_host }}";
+</script>
 <div class="dashboard-content map-page">
     <div class="performance-header">
         <div>

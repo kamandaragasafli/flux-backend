@@ -85,6 +85,7 @@ urlpatterns = [
     # Visited Doctors
     path("visited-doctors/", views.add_visited_doctor, name="add-visited-doctor"),
     path("visited-doctors/list/", views.get_visited_doctors, name="get-visited-doctors"),
+    path("cron/reset-visited-doctors/", views.cron_reset_visited_doctors, name="cron-reset-visited-doctors"),
     # Medicines
     path("medicines/", views.get_medicines, name="get-medicines"),
     path("medicines/<int:medicine_id>/", views.get_medicine_detail, name="get-medicine-detail"),

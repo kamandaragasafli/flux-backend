@@ -4,14 +4,22 @@
 <div class="dashboard-content">
     <div class="performance-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
         <div>
-            <a href="{% url 'dashboard_visited_doctors' %}" style="color: rgba(255,255,255,0.6); font-size: 13px; text-decoration: none; margin-bottom: 8px; display: inline-block;">
+            <a href="{% url 'dashboard_visited_doctors' %}?filter={{ filter_param|default:'today' }}" style="color: rgba(255,255,255,0.6); font-size: 13px; text-decoration: none; margin-bottom: 8px; display: inline-block;">
                 <i class="fas fa-arrow-left"></i> Görülən həkimlərə qayıt
             </a>
             <div class="performance-title">İstifadəçi: {{ profile_user.username }}</div>
             <div class="performance-main-title">Görülən həkimlər ({{ total }})</div>
         </div>
         <div>
-            <a href="?export=excel" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; background: #22c55e; color: white; border-radius: 8px; text-decoration: none; font-size: 14px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
+                <a href="?filter=today" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; {% if filter_param == 'today' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Bu gün</a>
+                <a href="?filter=week" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; {% if filter_param == 'week' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Bu həftə</a>
+                <a href="?filter=all" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; {% if filter_param == 'all' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Hamısı</a>
+            </div>
+            {% if export_error %}
+            <div style="color: #ef4444; font-size: 13px; margin-bottom: 8px;">Excel xətası: {{ export_error }}</div>
+            {% endif %}
+            <a href="?filter={{ filter_param|default:'today' }}&export=excel" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; background: #22c55e; color: white; border-radius: 8px; text-decoration: none; font-size: 14px;">
                 <i class="fas fa-file-excel"></i> Excel-ə export
             </a>
         </div>

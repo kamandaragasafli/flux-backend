@@ -273,6 +273,7 @@ class LocationPermissionReport(models.Model):
     """Konum icazəsi rədd edildikdə istifadəçinin səbəb bildirməsi"""
     
     REASON_CHOICES = [
+        ('location_started', 'Konum paylaşımı başladı'),
         ('stopped_tracking', 'İzləməni dayandırdım'),
         ('location_disabled', 'Telefonun konumunu bağladım'),
         ('internet_disabled', 'İnterneti bağladım'),

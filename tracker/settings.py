@@ -9,6 +9,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me-in-production")
+CRON_SECRET = os.getenv("CRON_SECRET", "")
 
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 

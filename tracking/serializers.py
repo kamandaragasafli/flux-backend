@@ -112,12 +112,15 @@ class RouteSerializer(serializers.ModelSerializer):
 
 class StartRouteSerializer(serializers.Serializer):
     def create(self, validated_data):
+        from .models import LocationPermissionReport
         user = self.context["request"].user
         # Only allow one active (no end_time) route
         active = Route.objects.filter(user=user, end_time__isnull=True).first()
         if active:
             return active
-        return Route.objects.create(user=user, start_time=timezone.now())
+        route = Route.objects.create(user=user, start_time=timezone.now())
+        LocationPermissionReport.objects.create(user=user, reason="location_started")
+        return route
 
 
 class StopRouteSerializer(serializers.Serializer):
