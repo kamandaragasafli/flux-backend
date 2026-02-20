@@ -1,0 +1,55 @@
+{% extends "dashboard_base.html" %}
+
+{% block content %}
+<div class="dashboard-content">
+    <div class="performance-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+        <div>
+            <a href="{% url 'dashboard_visited_doctors' %}" style="color: rgba(255,255,255,0.6); font-size: 13px; text-decoration: none; margin-bottom: 8px; display: inline-block;">
+                <i class="fas fa-arrow-left"></i> Görülən həkimlərə qayıt
+            </a>
+            <div class="performance-title">İstifadəçi: {{ profile_user.username }}</div>
+            <div class="performance-main-title">Görülən həkimlər ({{ total }})</div>
+        </div>
+        <div>
+            <a href="?export=excel" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; background: #22c55e; color: white; border-radius: 8px; text-decoration: none; font-size: 14px;">
+                <i class="fas fa-file-excel"></i> Excel-ə export
+            </a>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">Neçə həkim, nə vaxt, hansı həkim</div>
+        </div>
+        {% if visited_doctors %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>TARİX / SAAT</th>
+                        <th>HƏKİM ADI</th>
+                        <th>İXTİSAS</th>
+                        <th>XƏSTƏXANA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vd in visited_doctors %}
+                    <tr>
+                        <td>{{ vd.visit_date|date:"d.m.Y H:i" }}</td>
+                        <td><strong>{{ vd.doctor_name|default:"—" }}</strong></td>
+                        <td>{{ vd.doctor_specialty|default:"—" }}</td>
+                        <td>{{ vd.doctor_hospital|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-stethoscope"></i>
+            <p>Bu istifadəçinin görülən həkim qeydi yoxdur</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

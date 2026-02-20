@@ -13,10 +13,12 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me-in-production")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
 # Server IP ve localhost için allowed hosts (Expo Go için)
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "206.189.53.174,localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "app.solveypharma.com.az,206.189.53.174,localhost,127.0.0.1").split(",")
 
-# CSRF_TRUSTED_ORIGINS - DÜZƏLDİLMİŞ
+# CSRF_TRUSTED_ORIGINS - domain və IP
 CSRF_TRUSTED_ORIGINS = [
+    "https://app.solveypharma.com.az",
+    "http://app.solveypharma.com.az",
     "http://206.189.53.174",
     "https://206.189.53.174",
     "http://206.189.53.174:8000",
@@ -152,7 +154,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "az"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Baku"
 
 USE_I18N = True
 

@@ -147,13 +147,147 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   const mapEl = document.getElementById("map");
+  const userListEl = document.getElementById("mapUserList");
   if (mapEl && window.L) {
-    const map = L.map("map").setView([40.4093, 49.8671], 11); // Baku
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    let map = L.map("map", { zoomControl: false }).setView([40.4093, 49.8671], 11);
+    L.control.zoom({ position: "topright" }).addTo(map);
+    let markers = {};
+    let polylines = {};
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
+      attribution: "© OpenStreetMap © CARTO",
+      subdomains: "abcd",
     }).addTo(map);
+
+    function getCSRFToken() {
+      const cookies = document.cookie.split(";");
+      for (let c of cookies) {
+        const parts = c.trim().split("=");
+        if (parts[0] === "csrftoken") return parts[1] || "";
+      }
+      return document.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
+    }
+
+    function getMarkerColor(f) {
+      if (f.is_paused) return "#fbbf24";
+      if (f.status === "online") return "#22c55e";
+      if (f.status === "offline") return "#ef4444";
+      return "#6b7280";
+    }
+
+    function getStatusClass(f) {
+      if (f.is_paused) return "status-paused";
+      if (f.status === "online") return "status-online";
+      if (f.status === "offline") return "status-offline";
+      return "status-unknown";
+    }
+
+    async function loadMapLocations() {
+      try {
+        const res = await fetch("/api/movqe-son-json/", {
+          credentials: "same-origin",
+          headers: { "X-CSRFToken": getCSRFToken() || "" },
+        });
+        if (!res.ok) {
+          if (res.status === 403) console.warn("[MAP] Admin girişi lazımdır");
+          if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">Admin girişi lazımdır</div>';
+          return;
+        }
+        const data = await res.json();
+        const features = data.features || [];
+
+        Object.values(markers).forEach((m) => map.removeLayer(m));
+        Object.values(polylines).forEach((p) => map.removeLayer(p));
+        markers = {};
+        polylines = {};
+
+        const csrf = getCSRFToken();
+        for (const f of features) {
+          if (!f.lat || !f.lng) continue;
+          const color = getMarkerColor(f);
+          const name = f.ad || f.username || "İstifadəçi";
+          const m = L.circleMarker([f.lat, f.lng], {
+            radius: 12,
+            fillColor: color,
+            color: "#fff",
+            weight: 2,
+            fillOpacity: 1,
+          })
+            .addTo(map)
+            .bindPopup(
+              `<div style="padding:8px;min-width:140px;"><b>${name}</b><br>` +
+              `<span style="color:#6b7280;font-size:12px;">${f.is_paused ? "Dayandırılıb" : (f.status === "online" ? "Online" : f.status || "—")}</span></div>`
+            );
+          markers[f.id] = m;
+
+          try {
+            const rRes = await fetch(`/api/routes/?user=${f.id}`, {
+              credentials: "same-origin",
+              headers: { "X-CSRFToken": csrf || "" },
+            });
+            if (rRes.ok) {
+              const rData = await rRes.json();
+              const routes = Array.isArray(rData) ? rData : rData.results || [];
+              const active = routes.find((r) => !r.end_time);
+              if (active && active.points && active.points.length > 1) {
+                const pts = active.points.map((p) => [parseFloat(p.latitude), parseFloat(p.longitude)]);
+                const pl = L.polyline(pts, {
+                  color: color,
+                  weight: 4,
+                  opacity: 0.8,
+                  dashArray: f.is_paused ? "10,5" : null,
+                }).addTo(map);
+                polylines[f.id] = pl;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (userListEl) {
+          if (features.length === 0) {
+            userListEl.innerHTML = '<div class="map-empty-hint">İstifadəçi yoxdur</div>';
+          } else {
+            userListEl.innerHTML = features
+              .map((f) => {
+                const hasLoc = f.lat != null && f.lng != null;
+                const clickable = hasLoc ? " map-user-item-clickable" : "";
+                return `<div class="map-user-item${clickable}" data-user-id="${f.id}" data-lat="${f.lat ?? ""}" data-lng="${f.lng ?? ""}">
+                  <span class="status-dot ${getStatusClass(f)}"></span>
+                  <span>${f.ad || f.username || "İstifadəçi"}</span>
+                </div>`;
+              })
+              .join("");
+            userListEl.querySelectorAll(".map-user-item-clickable").forEach((el) => {
+              el.addEventListener("click", function () {
+                const uid = this.dataset.userId;
+                const lat = parseFloat(this.dataset.lat);
+                const lng = parseFloat(this.dataset.lng);
+                if (!isNaN(lat) && !isNaN(lng) && markers[uid]) {
+                  const pl = polylines[uid];
+                  if (pl && pl.getBounds) {
+                    try {
+                      const bounds = pl.getBounds();
+                      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+                    } catch (_) {
+                      map.setView([lat, lng], 15);
+                    }
+                  } else {
+                    map.setView([lat, lng], 15);
+                  }
+                  markers[uid].openPopup();
+                }
+              });
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[MAP] Konum yüklənmədi:", e);
+        if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">Yükləmə xətası</div>';
+      }
+    }
+
+    loadMapLocations();
+    setInterval(loadMapLocations, 10000);
   }
 });
 

@@ -60,6 +60,18 @@
                     <span>LOCATIONS</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_reports' %}" class="nav-link {% if active_page == 'reports' %}active{% endif %}">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>REPORTS</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_visited_doctors' %}" class="nav-link {% if active_page == 'visited_doctors' %}active{% endif %}">
+                    <i class="fas fa-stethoscope"></i>
+                    <span>GÖRÜLƏN HƏKİMLƏR</span>
+                </a>
+            </li>
         </ul>
     </div>
 

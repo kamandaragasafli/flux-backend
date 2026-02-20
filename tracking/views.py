@@ -6,7 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from django.db.models import Max, Count, Q
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
+from django.http import HttpResponse
 from django.contrib.auth.decorators import user_passes_test
 from django.utils import timezone
 from datetime import timedelta
@@ -314,28 +315,38 @@ class LastLocationsView(APIView):
                 "error": "Bu endpoint'e sadece admin kullanıcılar erişebilir."
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # Her kullanıcının son konumunu al
+        # Bütün istifadəçilər – konum paylaşanlar (online) yaşıl, digərləri boz
         users = User.objects.all()
         features = []
-        
+
         for user in users:
-            # Kullanıcının en son location point'ini al
             last_location = LocationPoint.objects.filter(
                 route__user=user
             ).order_by('-timestamp').first()
-            
+
             if last_location:
                 route = last_location.route
                 features.append({
                     "id": user.id,
                     "ad": user.username,
-                    "username": user.username,  # Dashboard için
+                    "username": user.username,
                     "lat": float(last_location.latitude),
                     "lng": float(last_location.longitude),
                     "status": route.connection_status if route else "unknown",
                     "is_paused": route.is_paused if route else False,
                 })
-        
+            else:
+                # Konum paylaşmayan istifadəçi – siyahıda görünsün, xəritədə marker yox
+                features.append({
+                    "id": user.id,
+                    "ad": user.username,
+                    "username": user.username,
+                    "lat": None,
+                    "lng": None,
+                    "status": "offline",
+                    "is_paused": False,
+                })
+
         return Response({
             "features": features
         })
@@ -570,6 +581,91 @@ def admin_dashboard_map(request):
         "active_page": "map",
     }
     return render(request, "dashboard_map.html", context)
+
+
+@user_passes_test(is_staff_user)
+def admin_dashboard_reports(request):
+    """Admin dashboard - konum/izləmə raporları (stopped_tracking, location_disabled və s.)"""
+    recent_reports = (
+        LocationPermissionReport.objects.select_related("user")
+        .order_by("-timestamp")[:200]
+    )
+    total_reports = LocationPermissionReport.objects.count()
+    last_24h = timezone.now() - timedelta(hours=24)
+    reports_24h = LocationPermissionReport.objects.filter(timestamp__gte=last_24h).count()
+
+    context = {
+        "active_page": "reports",
+        "recent_reports": recent_reports,
+        "total_reports": total_reports,
+        "reports_24h": reports_24h,
+    }
+    return render(request, "dashboard_reports.html", context)
+
+
+@user_passes_test(is_staff_user)
+def admin_dashboard_visited_doctors(request):
+    """Görülən həkimlər – istifadəçi siyahısı (hər birinin öz səhifəsinə keçid)"""
+    users_with_count = (
+        User.objects.annotate(visited_count=Count("visited_doctors"))
+        .filter(visited_count__gt=0)
+        .order_by("-visited_count")
+    )
+    total_visits = VisitedDoctor.objects.count()
+    context = {
+        "active_page": "visited_doctors",
+        "users_with_count": users_with_count,
+        "total_visits": total_visits,
+    }
+    return render(request, "dashboard_visited_doctors.html", context)
+
+
+@user_passes_test(is_staff_user)
+def admin_dashboard_visited_doctors_user(request, user_id):
+    """Bir istifadəçinin görülən həkimləri – cədvəl və Excel export"""
+    user = get_object_or_404(User, id=user_id)
+    export = request.GET.get("export") == "excel"
+
+    visited_doctors = VisitedDoctor.objects.filter(user=user).order_by("-visit_date")
+    total = visited_doctors.count()
+
+    if export:
+        from openpyxl import Workbook
+        from io import BytesIO
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Görülən həkimlər"
+        headers = ["Tarix / Saat", "Həkim adı", "İxtisas", "Xəstəxana"]
+        ws.append(headers)
+        for vd in visited_doctors:
+            ws.append([
+                vd.visit_date.strftime("%d.%m.%Y %H:%M") if vd.visit_date else "",
+                vd.doctor_name or "",
+                vd.doctor_specialty or "",
+                vd.doctor_hospital or "",
+            ])
+        from openpyxl.utils import get_column_letter
+        for col in range(1, len(headers) + 1):
+            ws.column_dimensions[get_column_letter(col)].width = 22
+        bio = BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        filename = f"gorulen-hekimler-{user.username}-{timezone.now().strftime('%Y%m%d')}.xlsx"
+        response = HttpResponse(
+            bio.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    context = {
+        "active_page": "visited_doctors",
+        "profile_user": user,
+        "visited_doctors": visited_doctors,
+        "total": total,
+    }
+    return render(request, "dashboard_visited_doctors_user.html", context)
 
 
 class VisitScheduleViewSet(viewsets.ModelViewSet):

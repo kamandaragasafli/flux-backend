@@ -1,17 +1,34 @@
 {% extends "dashboard_base.html" %}
 
 {% block content %}
-<div class="dashboard-content">
+<div class="dashboard-content map-page">
     <div class="performance-header">
-        <div class="performance-title">Live Tracking</div>
-        <div class="performance-main-title">Map</div>
+        <div>
+            <div class="performance-title">Canlı izləmə</div>
+            <div class="performance-main-title">Xəritə</div>
+        </div>
+        <div class="map-header-actions">
+            <div class="map-legend">
+                <span class="legend-item"><i class="fas fa-circle" style="color:#22c55e"></i> Online</span>
+                <span class="legend-item"><i class="fas fa-circle" style="color:#fbbf24"></i> Dayandırılıb</span>
+                <span class="legend-item"><i class="fas fa-circle" style="color:#6b7280"></i> Naməlum</span>
+            </div>
+        </div>
     </div>
 
-    <div class="section-card">
-        <div class="section-header">
-            <div class="section-title">Live Map</div>
+    <div class="map-container">
+        <div class="map-wrapper">
+            <div id="map" class="map-canvas"></div>
         </div>
-        <div id="map" style="width: 100%; height: 500px; border-radius: 16px; overflow: hidden;"></div>
+        <div class="map-sidebar">
+            <div class="map-sidebar-title">
+                <i class="fas fa-users"></i>
+                <span>Konum paylaşanlar</span>
+            </div>
+            <div id="mapUserList" class="map-user-list">
+                <div class="map-empty-hint">Məlumat yüklənir...</div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

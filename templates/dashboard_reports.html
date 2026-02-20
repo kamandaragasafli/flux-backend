@@ -1,0 +1,80 @@
+{% extends "dashboard_base.html" %}
+
+{% block content %}
+<div class="dashboard-content">
+    <div class="performance-header">
+        <div class="performance-title">Konum / İzləmə Hadisələri</div>
+        <div class="performance-main-title">Reports</div>
+    </div>
+
+    <div class="stats-grid" style="margin-bottom: 24px;">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon red">
+                    <i class="fas fa-clipboard-list"></i>
+                </div>
+                <div class="stat-label">Ümumi raporlar</div>
+            </div>
+            <div class="stat-value">{{ total_reports }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon orange">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-label">Son 24 saat</div>
+            </div>
+            <div class="stat-value">{{ reports_24h }}</div>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">Bütün raporlar</div>
+            <div style="color: rgba(255,255,255,0.5); font-size: 13px;">Məkan paylaşımı dayandırıldı, konum bağlandı və s.</div>
+        </div>
+        {% if recent_reports %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>İSTIFADƏÇİ</th>
+                        <th>HADİSƏ</th>
+                        <th>MƏLUMAT</th>
+                        <th>TARİX / SAAT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in recent_reports %}
+                    <tr>
+                        <td><strong>{{ report.user.username }}</strong></td>
+                        <td>
+                            {% if report.reason == 'stopped_tracking' %}
+                                <span class="badge badge-warning">İzləmə dayandırıldı</span>
+                            {% elif report.reason == 'location_disabled' %}
+                                <span class="badge badge-danger">Konum bağlandı</span>
+                            {% elif report.reason == 'internet_disabled' %}
+                                <span class="badge badge-danger">İnternet bağlandı</span>
+                            {% else %}
+                                <span class="badge badge-info">{{ report.get_reason_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            Məlumat göndərildi. Tarix: {{ report.timestamp|date:"d.m.Y H:i" }}
+                            {% if report.reason_text %}<br><small>{{ report.reason_text }}</small>{% endif %}
+                        </td>
+                        <td>{{ report.timestamp|date:"d.m.Y H:i:s" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-clipboard-list"></i>
+            <p>Hələ rapor yoxdur</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
