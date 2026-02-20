@@ -36,7 +36,7 @@ router.register(r'visits', HospitalVisitViewSet, basename='visit')
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
-    path("auth/login/", LoginView.as_view(), name="login"),
+    path("auth/login/", LoginView.as_view(), name="api-login"),
     path("auth/user/", CurrentUserView.as_view(), name="current-user"),
     path("users/register/", RegisterView.as_view(), name="register-users"),  # Mobile app compatibility
     path("users/login/", LoginView.as_view(), name="login-users"),  # Mobile app compatibility
