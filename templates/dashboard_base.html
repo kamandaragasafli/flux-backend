@@ -79,14 +79,19 @@
                         <i class="fas fa-gear"></i>
                     </div>
                 </div>
-                <div class="user-profile">
-                    <div class="user-avatar">
-                        {{ request.user.username|first|upper }}
+                <div class="user-profile" style="display: flex; align-items: center; gap: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="user-avatar">
+                            {{ request.user.username|first|upper }}
+                        </div>
+                        <div>
+                            <div style="font-size: 13px; color: #e5e7eb;">{{ request.user.username }}</div>
+                            <div style="font-size: 11px; color: #9ca3af;">Admin</div>
+                        </div>
                     </div>
-                    <div>
-                        <div style="font-size: 13px; color: #e5e7eb;">{{ request.user.username }}</div>
-                        <div style="font-size: 11px; color: #9ca3af;">Admin</div>
-                    </div>
+                    <a href="{% url 'logout' %}" style="color: #9ca3af; font-size: 13px; text-decoration: none;" title="Çıxış">
+                        <i class="fas fa-sign-out-alt"></i> Çıxış
+                    </a>
                 </div>
             </div>
         </div>

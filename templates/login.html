@@ -1,0 +1,135 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flux Admin – Giriş</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+    <style>
+        .login-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d3561 100%);
+        }
+        .login-box {
+            background: rgba(30, 41, 75, 0.9);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 48px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+        .login-box .logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .login-box .logo h2 {
+            color: #fff;
+            font-size: 36px;
+            font-weight: 800;
+            letter-spacing: 2px;
+        }
+        .login-box .logo p {
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        .login-form .form-group {
+            margin-bottom: 20px;
+        }
+        .login-form label {
+            display: block;
+            color: rgba(255,255,255,0.8);
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .login-form input {
+            width: 100%;
+            padding: 14px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+        }
+        .login-form input::placeholder {
+            color: rgba(255,255,255,0.4);
+        }
+        .login-form input:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+        .login-form .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .login-form .btn-login:hover {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+        .login-form .error-msg {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fca5a5;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-box">
+            <div class="logo">
+                <h2>FLUX</h2>
+                <p>Admin panelə giriş</p>
+            </div>
+
+            {% if form.non_field_errors %}
+                <div class="error-msg">
+                    {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+                </div>
+            {% endif %}
+            {% if next %}
+                <div class="error-msg" style="background: rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.5); color: #fcd34d;">
+                    Zəhmət olmasa giriş edin.
+                </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'login' %}" class="login-form">
+                {% csrf_token %}
+                {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+                <div class="form-group">
+                    <label for="id_username"><i class="fas fa-user"></i> İstifadəçi adı</label>
+                    <input type="text" name="username" id="id_username" autofocus required placeholder="İstifadəçi adı"
+                           value="{{ form.username.value|default:'' }}">
+                    {% if form.username.errors %}<small style="color:#fca5a5;">{{ form.username.errors.0 }}</small>{% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="id_password"><i class="fas fa-lock"></i> Parol</label>
+                    <input type="password" name="password" id="id_password" required placeholder="Parol">
+                    {% if form.password.errors %}<small style="color:#fca5a5;">{{ form.password.errors.0 }}</small>{% endif %}
+                </div>
+
+                <button type="submit" class="btn-login">Giriş</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

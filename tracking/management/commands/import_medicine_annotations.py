@@ -1,7 +1,7 @@
 """
-Django management command to import medicine annotations from Word files.
-Usage: python manage.py import_medicine_annotations <word_files_directory>
-Example: python manage.py import_medicine_annotations /path/to/word/files/
+Django management command to import medicine annotations from text files.
+Usage: python manage.py import_medicine_annotations <files_directory>
+Example: python manage.py import_medicine_annotations /path/to/drug/files/
 """
 import os
 from django.core.management.base import BaseCommand
@@ -17,13 +17,13 @@ except ImportError:
 
 
 class Command(BaseCommand):
-    help = 'Word fayllarından dərman annotasiyalarını import edir'
+    help = 'Text və Word fayllarından dərman annotasiyalarını import edir'
 
     def add_arguments(self, parser):
         parser.add_argument(
             'directory',
             type=str,
-            help='Word fayllarının olduğu qovluq yolu'
+            help='Annotasiya fayllarının olduğu qovluq yolu'
         )
         parser.add_argument(
             '--dry-run',
@@ -31,154 +31,246 @@ class Command(BaseCommand):
             help='Yalnız test edir, database-ə yazmır',
         )
 
-    def handle(self, *args, **options):
-        if not DOCX_AVAILABLE:
-            self.stdout.write(
-                self.style.ERROR('❌ python-docx paketi quraşdırılmayıb!')
-            )
-            self.stdout.write(
-                self.style.WARNING('💡 Quraşdırmaq üçün: pip install python-docx')
-            )
-            return
+    def read_text_file(self, file_path):
+        """Text faylını oxuyur və mətn qaytarır"""
+        try:
+            # Müxtəlif encoding-ləri yoxla
+            encodings = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252', 'windows-1251']
+            for encoding in encodings:
+                try:
+                    with open(file_path, 'r', encoding=encoding) as f:
+                        return f.read()
+                except UnicodeDecodeError:
+                    continue
+            # Əgər heç biri işləməsə, binary mode ilə oxu
+            with open(file_path, 'rb') as f:
+                content = f.read()
+                return content.decode('utf-8', errors='ignore')
+        except Exception as e:
+            raise Exception(f"Fayl oxuna bilmədi: {e}")
 
+    def parse_annotation(self, content):
+        """Annotasiya mətnini parse edir və strukturlaşdırır"""
+        lines = content.split('\n')
+        annotation_text = content.strip()
+        
+        # Dərman adını ilk sətirdən çıxar (boşluqları təmizlə)
+        medicine_name = lines[0].strip() if lines else ''
+        
+        return {
+            'name': medicine_name,
+            'annotation': annotation_text,
+        }
+
+    def handle(self, *args, **options):
         directory = options['directory']
         dry_run = options['dry_run']
 
         if not os.path.isdir(directory):
             self.stdout.write(
-                self.style.ERROR(f'❌ Qovluq tapılmadı: {directory}')
+                self.style.ERROR(f'Qovluq tapilmadi: {directory}')
             )
             return
 
         self.stdout.write('\n' + '='*60)
-        self.stdout.write(self.style.SUCCESS('📄 DƏRMAN ANNOTASİYALARI İMPORT'))
+        self.stdout.write(self.style.SUCCESS('DERMAN ANNOTASIYALARI IMPORT'))
         self.stdout.write('='*60 + '\n')
 
-        # Word fayllarını tap
-        word_files = [
-            f for f in os.listdir(directory)
-            if f.endswith(('.docx', '.doc'))
-        ]
+        # Bütün faylları tap (text və Word)
+        all_files = []
+        for f in os.listdir(directory):
+            file_path = os.path.join(directory, f)
+            if os.path.isfile(file_path):
+                # Text faylları (extension olmadan və ya .txt)
+                if not f.endswith(('.docx', '.doc')) or f.endswith(('.txt', '')):
+                    all_files.append(f)
+                # Word faylları
+                elif f.endswith(('.docx', '.doc')):
+                    all_files.append(f)
 
-        if not word_files:
+        if not all_files:
             self.stdout.write(
-                self.style.ERROR('❌ Qovluqda Word faylı tapılmadı!')
+                self.style.ERROR('Qovluqda fayl tapilmadi!')
             )
             return
 
-        self.stdout.write(f'📁 Tapılan Word faylları: {len(word_files)}\n')
+        self.stdout.write(f'Tapilan fayllar: {len(all_files)}\n')
 
         # Solvey database-dən dərmanları çək
+        solvey_dict = {}
         try:
-            solvey_medicines = SolveyMedicine.objects.using('external').filter(status=True)
-            solvey_dict = {med.id: med for med in solvey_medicines}
-            self.stdout.write(f'💊 Solvey database-dən tapılan dərmanlar: {len(solvey_dict)}\n')
+            from django.db import connections
+            import os as os_module
+            
+            # External database connection-u yoxla
+            if 'external' not in connections.databases:
+                self.stdout.write(
+                    self.style.WARNING('Xeberdarliq: External database konfiqurasiya olunmayib. Solvey database-den dermanlar cekilmeyecek.')
+                )
+            else:
+                medicines_table = os_module.getenv('SOLVEY_MEDICINES_TABLE', 'medicine_medical')
+                
+                with connections['external'].cursor() as cursor:
+                    cursor.execute(f"""
+                        SELECT id, med_name, med_full_name
+                        FROM "{medicines_table}"
+                        WHERE status = true
+                    """)
+                    columns = [col[0] for col in cursor.description]
+                    for row in cursor.fetchall():
+                        med_data = dict(zip(columns, row))
+                        solvey_dict[med_data['id']] = med_data
+                
+                self.stdout.write(f'Solvey database-den tapilan dermanlar: {len(solvey_dict)}\n')
         except Exception as e:
             self.stdout.write(
-                self.style.WARNING(f'⚠️  Solvey database-dən dərmanlar çəkilə bilmədi: {e}')
+                self.style.WARNING(f'Xeberdarliq: Solvey database-den dermanlar cekile bilmedi: {e}')
             )
-            solvey_dict = {}
 
         imported_count = 0
         updated_count = 0
         error_count = 0
 
-        for word_file in word_files:
-            file_path = os.path.join(directory, word_file)
+        for file_name in all_files:
+            file_path = os.path.join(directory, file_name)
             try:
-                # Word faylını oxu
-                doc = Document(file_path)
+                # Fayl tipini müəyyən et
+                is_word_file = file_name.endswith(('.docx', '.doc'))
                 
-                # Bütün mətnləri birləşdir
-                full_text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                if is_word_file:
+                    if not DOCX_AVAILABLE:
+                        self.stdout.write(
+                            self.style.WARNING(f'Xeberdarliq: Word fayli oxuna bilmedi (python-docx yoxdur): {file_name}')
+                        )
+                        error_count += 1
+                        continue
+                    
+                    # Word faylını oxu
+                    doc = Document(file_path)
+                    full_text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                else:
+                    # Text faylını oxu
+                    full_text = self.read_text_file(file_path)
                 
                 if not full_text.strip():
                     self.stdout.write(
-                        self.style.WARNING(f'⚠️  Boş fayl: {word_file}')
+                        self.style.WARNING(f'Xeberdarliq: Bos fayl: {file_name}')
                     )
                     continue
 
+                # Annotasiyanı parse et
+                parsed = self.parse_annotation(full_text)
+                medicine_name_from_file = parsed['name']
+                annotation_text = parsed['annotation']
+                
                 # Dərman adını fayl adından və ya mətnin ilk sətirindən çıxar
-                medicine_name = os.path.splitext(word_file)[0].strip()
+                medicine_name = os.path.splitext(file_name)[0].strip()
+                if not medicine_name or medicine_name == file_name:
+                    medicine_name = medicine_name_from_file.strip()
+                
+                # Dərman adını normalize et (böyük hərflərlə)
+                medicine_name_normalized = medicine_name.upper().strip()
                 
                 # Solvey database-də bu dərmanı tap
                 medicine_id = None
+                matched_med = None
+                
                 for med_id, med in solvey_dict.items():
-                    if (medicine_name.lower() in med.med_name.lower() or 
-                        medicine_name.lower() in (med.med_full_name or '').lower() or
-                        med.med_name.lower() in medicine_name.lower()):
+                    med_name = (med.get('med_name') or '').upper().strip()
+                    med_full_name = (med.get('med_full_name') or '').upper().strip()
+                    
+                    # Dərman adını müqayisə et
+                    if (medicine_name_normalized in med_name or 
+                        medicine_name_normalized in med_full_name or
+                        med_name in medicine_name_normalized or
+                        med_full_name in medicine_name_normalized):
                         medicine_id = med_id
+                        matched_med = med
                         break
+                
+                # Əgər tapılmadısa, fayl adı ilə də yoxla
+                if not medicine_id:
+                    for med_id, med in solvey_dict.items():
+                        med_name = (med.get('med_name') or '').upper().strip()
+                        med_full_name = (med.get('med_full_name') or '').upper().strip()
+                        file_base_name = os.path.splitext(file_name)[0].upper().strip()
+                        
+                        if (file_base_name in med_name or 
+                            file_base_name in med_full_name or
+                            med_name in file_base_name):
+                            medicine_id = med_id
+                            matched_med = med
+                            break
 
-                if medicine_id:
+                if medicine_id and matched_med:
                     # Local Medicine modelində dərmanı tap və ya yarat (solvey_id ilə)
                     medicine, created = Medicine.objects.get_or_create(
                         solvey_id=medicine_id,
                         defaults={
-                            'name': solvey_dict[medicine_id].med_name,
-                            'name_az': solvey_dict[medicine_id].med_full_name or solvey_dict[medicine_id].med_name,
-                            'annotation': full_text,
+                            'name': matched_med.get('med_name') or medicine_name,
+                            'name_az': matched_med.get('med_full_name') or matched_med.get('med_name') or medicine_name,
+                            'annotation': annotation_text,
                             'is_active': True,
                         }
                     )
                     
                     if not created:
                         # Artıq varsa, annotasiyanı yenilə
-                        medicine.annotation = full_text
+                        medicine.annotation = annotation_text
                         if not medicine.name:
-                            medicine.name = solvey_dict[medicine_id].med_name
+                            medicine.name = matched_med.get('med_name') or medicine_name
                         if not medicine.name_az:
-                            medicine.name_az = solvey_dict[medicine_id].med_full_name or solvey_dict[medicine_id].med_name
+                            medicine.name_az = matched_med.get('med_full_name') or matched_med.get('med_name') or medicine_name
                         if dry_run:
                             self.stdout.write(
-                                self.style.SUCCESS(f'✅ [DRY RUN] Yenilənəcək: {medicine_name} (Solvey ID: {medicine_id})')
+                                self.style.SUCCESS(f'[DRY RUN] Yenilenecek: {medicine_name} (Solvey ID: {medicine_id})')
                             )
                         else:
                             medicine.save()
                             updated_count += 1
                             self.stdout.write(
-                                self.style.SUCCESS(f'✅ Yeniləndi: {medicine_name} (Solvey ID: {medicine_id}, Local ID: {medicine.id})')
+                                self.style.SUCCESS(f'Yenilendi: {medicine_name} (Solvey ID: {medicine_id}, Local ID: {medicine.id})')
                             )
                     else:
                         if dry_run:
                             self.stdout.write(
-                                self.style.SUCCESS(f'✅ [DRY RUN] Əlavə ediləcək: {medicine_name} (Solvey ID: {medicine_id})')
+                                self.style.SUCCESS(f'[DRY RUN] Elave edilecek: {medicine_name} (Solvey ID: {medicine_id})')
                             )
                         else:
                             imported_count += 1
                             self.stdout.write(
-                                self.style.SUCCESS(f'✅ Əlavə edildi: {medicine_name} (Solvey ID: {medicine_id}, Local ID: {medicine.id})')
+                                self.style.SUCCESS(f'Elave edildi: {medicine_name} (Solvey ID: {medicine_id}, Local ID: {medicine.id})')
                             )
                 else:
                     # Solvey database-də tapılmadı, yalnız annotasiya ilə yarat
                     if dry_run:
                         self.stdout.write(
-                            self.style.WARNING(f'⚠️  [DRY RUN] Solvey-də tapılmadı, yaradılacaq: {medicine_name}')
+                            self.style.WARNING(f'[DRY RUN] Solvey-de tapilmadi, yaradilacaq: {medicine_name}')
                         )
                     else:
                         medicine = Medicine.objects.create(
                             name=medicine_name,
                             name_az=medicine_name,
-                            annotation=full_text,
+                            annotation=annotation_text,
                             is_active=True,
                         )
                         imported_count += 1
                         self.stdout.write(
-                            self.style.SUCCESS(f'✅ Yeni dərman əlavə edildi: {medicine_name} (ID: {medicine.id})')
+                            self.style.SUCCESS(f'Yeni derman elave edildi: {medicine_name} (ID: {medicine.id})')
                         )
 
             except Exception as e:
                 error_count += 1
                 self.stdout.write(
-                    self.style.ERROR(f'❌ Xəta ({word_file}): {str(e)}')
+                    self.style.ERROR(f'Xeta ({file_name}): {str(e)}')
                 )
 
         # Nəticə
         self.stdout.write('\n' + '='*60)
         if dry_run:
-            self.stdout.write(self.style.WARNING('🔍 DRY RUN MODE - Database-ə yazılmadı'))
+            self.stdout.write(self.style.WARNING('DRY RUN MODE - Database-e yazilmadi'))
         else:
-            self.stdout.write(self.style.SUCCESS(f'✅ Əlavə edildi: {imported_count}'))
-            self.stdout.write(self.style.SUCCESS(f'🔄 Yeniləndi: {updated_count}'))
-        self.stdout.write(self.style.ERROR(f'❌ Xəta: {error_count}'))
+            self.stdout.write(self.style.SUCCESS(f'Elave edildi: {imported_count}'))
+            self.stdout.write(self.style.SUCCESS(f'Yenilendi: {updated_count}'))
+        self.stdout.write(self.style.ERROR(f'Xeta: {error_count}'))
         self.stdout.write('='*60 + '\n')

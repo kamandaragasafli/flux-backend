@@ -275,6 +275,7 @@ class LocationPermissionReport(models.Model):
     REASON_CHOICES = [
         ('stopped_tracking', 'İzləməni dayandırdım'),
         ('location_disabled', 'Telefonun konumunu bağladım'),
+        ('internet_disabled', 'İnterneti bağladım'),
         ('privacy', 'Məxfilik narahatlığı'),
         ('battery', 'Batareya istehlakı'),
         ('not_needed', 'İstifadə etmirəm'),

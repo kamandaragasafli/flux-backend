@@ -868,9 +868,10 @@ def create_location_permission_report(request):
         
         reason = data.get('reason')
         reason_text = data.get('reason_text', '')
+        client_timestamp = data.get('timestamp') or data.get('client_timestamp')  # ISO format
         
         # Validation
-        valid_reasons = ['stopped_tracking', 'location_disabled', 'privacy', 'battery', 'not_needed', 'security', 'other']
+        valid_reasons = ['stopped_tracking', 'location_disabled', 'internet_disabled', 'privacy', 'battery', 'not_needed', 'security', 'other']
         if not reason or reason not in valid_reasons:
             return Response(
                 {'success': False, 'error': f'Invalid reason. Must be one of: {valid_reasons}'},
@@ -885,6 +886,7 @@ def create_location_permission_report(request):
         
         # Create report
         from .models import LocationPermissionReport
+        from django.utils.dateparse import parse_datetime
         report = LocationPermissionReport.objects.create(
             user=user,
             reason=reason,
@@ -893,11 +895,22 @@ def create_location_permission_report(request):
         
         logger.info(f"[LOCATION_REPORT] Created report for user {user.username}: {reason}")
         
-        return Response({
+        response_data = {
             'success': True,
             'message': 'Rapor uğurla göndərildi',
-            'report_id': report.id
-        }, status=status.HTTP_201_CREATED)
+            'report_id': report.id,
+            'timestamp': report.timestamp.isoformat(),
+            'timestamp_formatted': report.timestamp.strftime('%d.%m.%Y %H:%M'),
+        }
+        if client_timestamp:
+            try:
+                parsed = parse_datetime(client_timestamp)
+                if parsed:
+                    response_data['client_timestamp_formatted'] = parsed.strftime('%d.%m.%Y %H:%M')
+            except Exception:
+                pass
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         logger.error(f"[LOCATION_REPORT] Error creating report: {e}")
