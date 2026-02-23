@@ -188,6 +188,17 @@ document.addEventListener("DOMContentLoaded", function () {
       return "status-unknown";
     }
 
+    /** Pil ikonası HTML-i */
+    function batteryHTML(level) {
+      if (level === null || level === undefined) return "";
+      const pct = Math.max(0, Math.min(100, level));
+      let color = "#22c55e";   // yaşıl
+      let icon  = "🔋";
+      if (pct <= 15) { color = "#ef4444"; icon = "🪫"; }
+      else if (pct <= 30) { color = "#f59e0b"; }
+      return `<span class="battery-badge" style="color:${color}" title="Pil: ${pct}%">${icon} ${pct}%</span>`;
+    }
+
     async function loadMapLocations() {
       try {
         const url = "/api/movqe-son-json/";
@@ -222,8 +233,13 @@ document.addEventListener("DOMContentLoaded", function () {
           })
             .addTo(map)
             .bindPopup(
-              `<div style="padding:8px;min-width:140px;"><b>${name}</b><br>` +
-              `<span style="color:#6b7280;font-size:12px;">${f.is_paused ? "Dayandırılıb" : (f.status === "online" ? "Online" : f.status || "—")}</span></div>`
+              `<div style="padding:8px;min-width:160px;">` +
+              `<b>${name}</b><br>` +
+              `<span style="color:#6b7280;font-size:12px;">${f.is_paused ? "Dayandırılıb" : (f.status === "online" ? "Online" : f.status || "—")}</span>` +
+              (f.battery_level !== null && f.battery_level !== undefined
+                ? `<br><span style="font-size:12px;">${batteryHTML(f.battery_level)}</span>`
+                : "") +
+              `</div>`
             );
           markers[f.id] = m;
 
@@ -258,9 +274,11 @@ document.addEventListener("DOMContentLoaded", function () {
               .map((f) => {
                 const hasLoc = f.lat != null && f.lng != null;
                 const clickable = hasLoc ? " map-user-item-clickable" : "";
+                const batHtml = batteryHTML(f.battery_level);
                 return `<div class="map-user-item${clickable}" data-user-id="${f.id}" data-lat="${f.lat ?? ""}" data-lng="${f.lng ?? ""}">
                   <span class="status-dot ${getStatusClass(f)}"></span>
-                  <span>${f.ad || f.username || "İstifadəçi"}</span>
+                  <span class="map-user-name">${f.ad || f.username || "İstifadəçi"}</span>
+                  ${batHtml ? `<span class="map-user-battery">${batHtml}</span>` : ""}
                 </div>`;
               })
               .join("");

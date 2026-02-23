@@ -106,6 +106,43 @@ class StopRouteView(APIView):
         return Response(RouteSerializer(route).data, status=status.HTTP_200_OK)
 
 
+class HeartbeatView(APIView):
+    """
+    Hər 30 saniyədə bir mobil tərəfdən gələn 'mən buradayam' siqnalı.
+    Aktiv route-un last_ping sahəsini yeniləyir.
+    Konum məlumatı deyil — yalnız bağlantı canlılığını göstərir.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        route = (
+            Route.objects
+            .filter(user=request.user, end_time__isnull=True)
+            .order_by('-start_time')
+            .first()
+        )
+        if not route:
+            return Response(
+                {"detail": "Aktiv route tapılmadı."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        route.last_ping = timezone.now()
+        update_fields = ['last_ping']
+
+        battery = request.data.get('battery_level')
+        if battery is not None:
+            try:
+                battery_int = int(battery)
+                if 0 <= battery_int <= 100:
+                    route.last_battery_level = battery_int
+                    update_fields.append('last_battery_level')
+            except (ValueError, TypeError):
+                pass
+
+        route.save(update_fields=update_fields)
+        return Response({"ok": True, "last_ping": route.last_ping})
+
+
 class PauseRouteView(APIView):
     """Aktif route'u duraklatır (Doktor odasında)"""
     permission_classes = [permissions.IsAuthenticated]
@@ -180,6 +217,110 @@ class CreateLocationView(generics.CreateAPIView):
         ctx = super().get_serializer_context()
         ctx["request"] = self.request
         return ctx
+
+
+class BatchLocationView(APIView):
+    """
+    Offline buferdən toplu konum nöqtəsi qəbul edir.
+    Mobil tərəf internet bəpra olduqda bu endpoint-ə göndərir.
+
+    POST /api/locations/batch/
+    {
+      "points": [
+        {"latitude": ..., "longitude": ..., "timestamp": "...", "accuracy": ..., "speed": ...},
+        ...
+      ]
+    }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from django.db import transaction
+
+        points_data = request.data.get('points', [])
+        if not isinstance(points_data, list) or len(points_data) == 0:
+            return Response(
+                {"detail": "points siyahısı boşdur."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(points_data) > 500:
+            return Response(
+                {"detail": "Maksimum 500 nöqtə qəbul edilir."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        route = (
+            Route.objects
+            .filter(user=request.user, end_time__isnull=True)
+            .order_by('-start_time')
+            .first()
+        )
+        if not route:
+            # Aktiv route yoxdursa, son tamamlanmış routu tap (bufer çox gec göndərilibsə)
+            route = (
+                Route.objects
+                .filter(user=request.user)
+                .order_by('-start_time')
+                .first()
+            )
+        if not route:
+            return Response(
+                {"detail": "Route tapılmadı."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        created_points = []
+        errors = []
+
+        with transaction.atomic():
+            for idx, p in enumerate(points_data):
+                try:
+                    lat = p.get('latitude')
+                    lng = p.get('longitude')
+                    ts_raw = p.get('timestamp')
+                    if lat is None or lng is None or ts_raw is None:
+                        errors.append({"index": idx, "error": "latitude/longitude/timestamp tələb olunur."})
+                        continue
+
+                    from django.utils.dateparse import parse_datetime
+                    ts = parse_datetime(str(ts_raw))
+                    if ts is None:
+                        errors.append({"index": idx, "error": f"Yanlış timestamp: {ts_raw}"})
+                        continue
+
+                    # Timezone-aware et
+                    if ts.tzinfo is None:
+                        from django.utils import timezone as tz
+                        ts = tz.make_aware(ts)
+
+                    point = LocationPoint(
+                        route=route,
+                        latitude=lat,
+                        longitude=lng,
+                        timestamp=ts,
+                        accuracy=p.get('accuracy'),
+                        speed=p.get('speed'),
+                        is_online=False,  # offline buferdən gəldiyi üçün
+                    )
+                    created_points.append(point)
+                except Exception as e:
+                    errors.append({"index": idx, "error": str(e)})
+
+            if created_points:
+                LocationPoint.objects.bulk_create(created_points, ignore_conflicts=True)
+
+                # Route-un son konum vaxtını yenilə
+                latest_ts = max(p.timestamp for p in created_points)
+                if not route.last_location_time or latest_ts > route.last_location_time:
+                    route.last_location_time = latest_ts
+                    route.save(update_fields=['last_location_time'])
+
+        return Response({
+            "created": len(created_points),
+            "errors": len(errors),
+            "error_details": errors[:10] if errors else [],
+        }, status=status.HTTP_201_CREATED)
 
 
 class RouteDetailView(generics.RetrieveAPIView):
@@ -326,6 +467,11 @@ class LastLocationsView(APIView):
 
             if last_location:
                 route = last_location.route
+                battery = (
+                    last_location.battery_level
+                    if last_location.battery_level is not None
+                    else (route.last_battery_level if route else None)
+                )
                 features.append({
                     "id": user.id,
                     "ad": user.username,
@@ -334,6 +480,7 @@ class LastLocationsView(APIView):
                     "lng": float(last_location.longitude),
                     "status": route.connection_status if route else "unknown",
                     "is_paused": route.is_paused if route else False,
+                    "battery_level": battery,
                 })
             else:
                 # Konum paylaşmayan istifadəçi – siyahıda görünsün, xəritədə marker yox
@@ -345,6 +492,7 @@ class LastLocationsView(APIView):
                     "lng": None,
                     "status": "offline",
                     "is_paused": False,
+                    "battery_level": None,
                 })
 
         return Response({

@@ -551,12 +551,27 @@ body {
 .map-user-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
+    gap: 8px;
+    padding: 10px 12px;
     background: rgba(255,255,255,0.04);
     border-radius: 10px;
     margin-bottom: 8px;
     font-size: 14px;
+}
+.map-user-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.map-user-battery {
+    flex-shrink: 0;
+    font-size: 12px;
+    opacity: 0.9;
+}
+.battery-badge {
+    font-size: 12px;
+    white-space: nowrap;
 }
 .map-user-item .status-dot {
     width: 10px;

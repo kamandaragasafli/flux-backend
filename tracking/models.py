@@ -37,7 +37,8 @@ class Route(models.Model):
     
     # Bağlantı durumu
     is_online = models.BooleanField(default=True)
-    last_ping = models.DateTimeField(null=True, blank=True)  # Son sinyal zamanı
+    last_ping = models.DateTimeField(null=True, blank=True)    # Son sinyal zamanı
+    last_battery_level = models.IntegerField(null=True, blank=True)  # Son pil faizi (0-100)
 
     def __str__(self) -> str:
         return f"Route {self.id} for {self.user} ({self.start_time} - {self.end_time})"
@@ -49,12 +50,14 @@ class Route(models.Model):
     
     @property
     def connection_status(self):
-        """Bağlantı durumu - son 30 saniyede sinyal var mı?"""
+        """Bağlantı durumu - son 90 saniyədə heartbeat var mı?
+        (Heartbeat hər 30s göndərilir, şəbəkə gecikmələri üçün 3× buffer)
+        """
         if not self.last_ping:
             return 'unknown'
         from django.utils import timezone
         from datetime import timedelta
-        if timezone.now() - self.last_ping > timedelta(seconds=30):
+        if timezone.now() - self.last_ping > timedelta(seconds=90):
             return 'offline'
         return 'online'
 
