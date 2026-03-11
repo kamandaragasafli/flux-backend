@@ -1,69 +1,211 @@
 {% extends "dashboard_base.html" %}
+{% load static %}
 
 {% block content %}
+<script>
+  window.DASHBOARD_API_BASE = "{{ request.scheme }}://{{ request.get_host }}";
+</script>
 <div class="dashboard-content">
     <div class="performance-header">
-        <div class="performance-title">Notification Center</div>
-        <div class="performance-main-title">Notifications</div>
+        <div class="performance-title">Bildiriş mərkəzi</div>
+        <div class="performance-main-title">Bildirişlər</div>
     </div>
 
-    <div class="section-card">
-        <div class="section-header">
-            <div class="section-title">Recent Notifications</div>
+    <div class="notif-layout">
+        <div class="section-card notif-send-card">
+            <div class="section-header">
+                <div class="section-title"><i class="fas fa-paper-plane"></i> Bildiriş göndər</div>
+            </div>
+
+            <div class="notif-templates">
+                <span class="notif-templates-label">Hazır şablonlar:</span>
+                <div class="notif-template-chips">
+                    <button type="button" class="notif-chip" data-title="Xəbərdarlıq" data-msg="Konum paylaşımını aktiv edin." data-type="warning">📍 Konum xəbərdarlığı</button>
+                    <button type="button" class="notif-chip" data-title="Xatırlatma" data-msg="Bu həftə xəstəxana ziyarətinizi yadda saxlayın." data-type="info">📅 Ziyarət xatırlatması</button>
+                    <button type="button" class="notif-chip" data-title="Yeniləmə" data-msg="Tətbiq yeniləndi. Ən son versiyanı yükləyin." data-type="message">🔄 Yeniləmə bildirişi</button>
+                    <button type="button" class="notif-chip" data-title="Vacib" data-msg="Sistemdə texniki işlər aparılır. Qısa müddətə xidmət dayana bilər." data-type="warning">⚠️ Texniki iş</button>
+                    <button type="button" class="notif-chip" data-title="Uğurlar" data-msg="Gününüz uğurlu keçsin!" data-type="info">✨ Uğurlar</button>
+                    <button type="button" class="notif-chip" data-title="Yoxlama" data-msg="Konum paylaşımınızı yoxlayın. Əgər problem varsa dəstək ilə əlaqə saxlayın." data-type="message">🔍 Yoxlama tələbi</button>
+                </div>
+            </div>
+
+            <form id="notifForm" class="notif-form">
+                <div class="form-row">
+                    <label>Alıcı</label>
+                    <div class="notif-recipient-row">
+                        <select id="notifUser" class="form-control notif-select">
+                            <option value="">— İstifadəçi seçin —</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.username }}</option>
+                            {% endfor %}
+                        </select>
+                        <label class="notif-check-label">
+                            <input type="checkbox" id="notifSendAll" class="notif-check">
+                            <span>Hamıya göndər</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Tip</label>
+                    <select id="notifType" class="form-control notif-select">
+                        <option value="message">Mesaj</option>
+                        <option value="info">Məlumat</option>
+                        <option value="warning">Xəbərdarlıq</option>
+                        <option value="error">Xəta</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Başlıq</label>
+                    <input type="text" id="notifTitle" class="form-control" placeholder="Bildiriş başlığı" required>
+                </div>
+                <div class="form-row">
+                    <label>Mesaj</label>
+                    <textarea id="notifMessage" class="form-control" rows="4" placeholder="Bildiriş mətni" required></textarea>
+                </div>
+                <button type="submit" class="notif-submit-btn">
+                    <i class="fas fa-paper-plane"></i> Göndər
+                </button>
+            </form>
         </div>
-        {% if recent_notifications %}
-        <div style="overflow-x: auto;">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>USER</th>
-                        <th>TYPE</th>
-                        <th>TITLE</th>
-                        <th>MESSAGE</th>
-                        <th>DATE</th>
-                        <th>STATUS</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for notification in recent_notifications %}
-                    <tr>
-                        <td><strong>{{ notification.user.username }}</strong></td>
-                        <td>
-                            {% if notification.notification_type == 'message' %}
-                            <span class="badge badge-info">Message</span>
-                            {% elif notification.notification_type == 'info' %}
-                            <span class="badge badge-info">Info</span>
-                            {% elif notification.notification_type == 'warning' %}
-                            <span class="badge badge-warning">Warning</span>
-                            {% elif notification.notification_type == 'error' %}
-                            <span class="badge badge-danger">Error</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ notification.title }}</td>
-                        <td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            {{ notification.message|truncatewords:12 }}
-                        </td>
-                        <td>{{ notification.created_at|date:"d.m.Y H:i" }}</td>
-                        <td>
-                            {% if notification.is_read %}
-                            <span class="badge badge-success">Read</span>
-                            {% else %}
-                            <span class="badge badge-warning">Unread</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+
+        <div class="section-card notif-history-card">
+            <div class="section-header">
+                <div class="section-title">Son bildirişlər</div>
+                <button type="button" class="notif-refresh-btn" onclick="refreshNotifs()" title="Yenilə"><i class="fas fa-sync-alt"></i></button>
+            </div>
+            <div id="notifTableWrap">
+                {% if recent_notifications %}
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>İSTIFADƏÇİ</th>
+                                <th>TİP</th>
+                                <th>BAŞLIQ</th>
+                                <th>MESAJ</th>
+                                <th>TARİX</th>
+                                <th>VƏZİYYƏT</th>
+                            </tr>
+                        </thead>
+                        <tbody id="notifTableBody">
+                            {% for notification in recent_notifications %}
+                            <tr>
+                                <td><strong>{{ notification.user.username }}</strong></td>
+                                <td>
+                                    {% if notification.notification_type == 'message' %}
+                                    <span class="badge badge-info">Mesaj</span>
+                                    {% elif notification.notification_type == 'info' %}
+                                    <span class="badge badge-info">Məlumat</span>
+                                    {% elif notification.notification_type == 'warning' %}
+                                    <span class="badge badge-warning">Xəbərdarlıq</span>
+                                    {% elif notification.notification_type == 'error' %}
+                                    <span class="badge badge-danger">Xəta</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ notification.title }}</td>
+                                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ notification.message }}">{{ notification.message|truncatewords:10 }}</td>
+                                <td>{{ notification.created_at|date:"d.m.Y H:i" }}</td>
+                                <td>{% if notification.is_read %}<span class="badge badge-success">Oxunub</span>{% else %}<span class="badge badge-warning">Oxunmayıb</span>{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-bell"></i>
+                    <p>Bildiriş tapılmadı</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
-        {% else %}
-        <div class="empty-state">
-            <i class="fas fa-bell"></i>
-            <p>No notifications found</p>
-        </div>
-        {% endif %}
     </div>
 </div>
+
+<script>
+(function() {
+  function getCSRF() {
+    const c = document.cookie.split(';');
+    for (let x of c) {
+      const p = x.trim().split('=');
+      if (p[0] === 'csrftoken') return p[1] || '';
+    }
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  }
+
+  document.querySelectorAll('.notif-chip').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.getElementById('notifTitle').value = this.dataset.title || '';
+      document.getElementById('notifMessage').value = this.dataset.msg || '';
+      document.getElementById('notifType').value = this.dataset.type || 'info';
+    });
+  });
+
+  document.getElementById('notifSendAll').addEventListener('change', function() {
+    const sel = document.getElementById('notifUser');
+    sel.disabled = this.checked;
+    if (this.checked) sel.value = '';
+  });
+
+  document.getElementById('notifForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const sendAll = document.getElementById('notifSendAll').checked;
+    const userId = document.getElementById('notifUser').value;
+    const title = document.getElementById('notifTitle').value.trim();
+    const message = document.getElementById('notifMessage').value.trim();
+    const type = document.getElementById('notifType').value;
+
+    if (!title || !message) {
+      alert('Başlıq və mesaj daxil edin.');
+      return;
+    }
+    if (!sendAll && !userId) {
+      alert('İstifadəçi seçin və ya "Hamıya göndər" işarələyin.');
+      return;
+    }
+
+    const btn = this.querySelector('button[type=submit]');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Göndərilir...';
+
+    try {
+      const base = window.DASHBOARD_API_BASE || '';
+      const res = await fetch(base + '/api/notifications/create/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCSRF(),
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          send_to_all: sendAll,
+          user_id: sendAll ? null : parseInt(userId, 10),
+          title: title,
+          message: message,
+          notification_type: type
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('✅ ' + (data.created || 1) + ' istifadəçiyə bildiriş göndərildi.');
+        document.getElementById('notifTitle').value = '';
+        document.getElementById('notifMessage').value = '';
+        refreshNotifs();
+      } else {
+        alert('❌ Xəta: ' + (data.detail || 'Göndərilə bilmədi'));
+      }
+    } catch (err) {
+      alert('❌ Xəta: ' + (err.message || 'Şəbəkə xətası'));
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Göndər';
+    }
+  });
+})();
+
+function refreshNotifs() {
+  window.location.reload();
+}
+</script>
 {% endblock %}
-
-

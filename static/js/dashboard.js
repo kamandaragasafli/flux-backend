@@ -148,6 +148,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const mapEl = document.getElementById("map");
   const userListEl = document.getElementById("mapUserList");
+  const userProfileEl = document.getElementById("mapUserProfile");
+  let selectedUserId = null;
 
   function setMapUserListError(msg) {
     if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">' + msg + "</div>";
@@ -242,29 +244,52 @@ document.addEventListener("DOMContentLoaded", function () {
               `</div>`
             );
           markers[f.id] = m;
-
-          try {
-            const rRes = await fetch("/api/routes/?user=" + f.id, {
-              credentials: "same-origin",
-              headers: { "X-CSRFToken": csrf || "" },
-            });
-            if (rRes.ok) {
-              const rData = await rRes.json();
-              const routes = Array.isArray(rData) ? rData : rData.results || [];
-              const active = routes.find((r) => !r.end_time);
-              if (active && active.points && active.points.length > 1) {
-                const pts = active.points.map((p) => [parseFloat(p.latitude), parseFloat(p.longitude)]);
-                const pl = L.polyline(pts, {
-                  color: color,
-                  weight: 4,
-                  opacity: 0.8,
-                  dashArray: f.is_paused ? "10,5" : null,
-                }).addTo(map);
-                polylines[f.id] = pl;
-              }
-            }
-          } catch (_) {}
         }
+
+        if (selectedUserId && !features.find((x) => x.id == selectedUserId)) {
+          selectedUserId = null;
+        }
+        if (selectedUserId) {
+          const sel = features.find((x) => x.id == selectedUserId);
+          if (sel) {
+            try {
+              const rRes = await fetch("/api/routes/?user=" + selectedUserId, {
+                credentials: "same-origin",
+                headers: { "X-CSRFToken": csrf || "" },
+              });
+              if (rRes.ok) {
+                const rData = await rRes.json();
+                const routes = Array.isArray(rData) ? rData : rData.results || [];
+                const active = routes.find((r) => !r.end_time) || routes[routes.length - 1];
+                if (active && active.points && active.points.length > 1) {
+                  const pts = active.points.map((p) => [parseFloat(p.latitude), parseFloat(p.longitude)]);
+                  const pl = L.polyline(pts, {
+                    color: getMarkerColor(sel),
+                    weight: 4,
+                    opacity: 0.8,
+                    dashArray: sel.is_paused ? "10,5" : null,
+                  }).addTo(map);
+                  polylines[selectedUserId] = pl;
+                  if (userProfileEl) {
+                    const startT = active.start_time ? new Date(active.start_time).toLocaleString("az-AZ") : "—";
+                    const endT = active.end_time ? new Date(active.end_time).toLocaleString("az-AZ") : "Davam edir";
+                    userProfileEl.innerHTML =
+                      `<div class="map-user-profile-box">` +
+                      `<div class="map-user-profile-title"><i class="fas fa-route"></i> ${sel.ad || sel.username || "İstifadəçi"} — Marşrut</div>` +
+                      `<div class="map-user-profile-row">Başlanğıc: ${startT}</div>` +
+                      `<div class="map-user-profile-row">Bitmə: ${endT}</div>` +
+                      `<div class="map-user-profile-row">Nöqtələr: ${active.points.length}</div>` +
+                      `</div>`;
+                    userProfileEl.style.display = "block";
+                  }
+                } else if (userProfileEl) {
+                  userProfileEl.innerHTML = `<div class="map-user-profile-box"><div class="map-user-profile-title">${sel.ad || sel.username} — Marşrut məlumatı yoxdur</div></div>`;
+                  userProfileEl.style.display = "block";
+                }
+              }
+            } catch (_) {}
+          } else if (userProfileEl) userProfileEl.style.display = "none";
+        } else if (userProfileEl) userProfileEl.style.display = "none";
 
         if (userListEl) {
           if (features.length === 0) {
@@ -287,20 +312,24 @@ document.addEventListener("DOMContentLoaded", function () {
                 const uid = this.dataset.userId;
                 const lat = parseFloat(this.dataset.lat);
                 const lng = parseFloat(this.dataset.lng);
-                if (!isNaN(lat) && !isNaN(lng) && markers[uid]) {
-                  const pl = polylines[uid];
-                  if (pl && pl.getBounds) {
-                    try {
-                      const bounds = pl.getBounds();
-                      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
-                    } catch (_) {
+                selectedUserId = selectedUserId == uid ? null : uid;
+                document.querySelectorAll(".map-user-item").forEach((e) => e.classList.remove("selected"));
+                if (selectedUserId) this.classList.add("selected");
+                loadMapLocations().then(function () {
+                  if (!isNaN(lat) && !isNaN(lng) && markers[uid]) {
+                    if (selectedUserId && polylines[uid]) {
+                      try {
+                        const bounds = polylines[uid].getBounds();
+                        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+                      } catch (_) {
+                        map.setView([lat, lng], 15);
+                      }
+                    } else {
                       map.setView([lat, lng], 15);
                     }
-                  } else {
-                    map.setView([lat, lng], 15);
+                    if (markers[uid]) markers[uid].openPopup();
                   }
-                  markers[uid].openPopup();
-                }
+                });
               });
             });
           }
