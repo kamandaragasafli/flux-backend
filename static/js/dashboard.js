@@ -235,15 +235,26 @@ document.addEventListener("DOMContentLoaded", function () {
           })
             .addTo(map)
             .bindPopup(
-              `<div style="padding:8px;min-width:160px;">` +
+              `<div style="padding:8px;min-width:180px;">` +
               `<b>${name}</b><br>` +
               `<span style="color:#6b7280;font-size:12px;">${f.is_paused ? "Dayandırılıb" : (f.status === "online" ? "Online" : f.status || "—")}</span>` +
               (f.battery_level !== null && f.battery_level !== undefined
                 ? `<br><span style="font-size:12px;">${batteryHTML(f.battery_level)}</span>`
                 : "") +
+              `<br><span style="font-size:11px;color:#9ca3af;">📍 ${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}</span>` +
               `</div>`
             );
           markers[f.id] = m;
+        }
+
+        if (features.length > 0) {
+          const pts = features.filter((x) => x.lat && x.lng).map((x) => [x.lat, x.lng]);
+          if (pts.length > 0) {
+            try {
+              const bounds = L.latLngBounds(pts);
+              map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+            } catch (_) {}
+          }
         }
 
         if (selectedUserId && !features.find((x) => x.id == selectedUserId)) {

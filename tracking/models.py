@@ -50,14 +50,14 @@ class Route(models.Model):
     
     @property
     def connection_status(self):
-        """Bağlantı durumu - son 90 saniyədə heartbeat var mı?
-        (Heartbeat hər 30s göndərilir, şəbəkə gecikmələri üçün 3× buffer)
+        """Bağlantı durumu — son 7 dəqiqədə heartbeat var mı?
+        (Heartbeat hər 5 dəq göndərilir, batareyaya dostu rejim)
         """
         if not self.last_ping:
             return 'unknown'
         from django.utils import timezone
         from datetime import timedelta
-        if timezone.now() - self.last_ping > timedelta(seconds=90):
+        if timezone.now() - self.last_ping > timedelta(seconds=420):
             return 'offline'
         return 'online'
 

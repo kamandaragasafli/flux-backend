@@ -27,8 +27,14 @@
                     {% for location in recent_locations %}
                     <tr>
                         <td><strong>{{ location.route.user.username }}</strong></td>
-                        <td style="font-family: monospace; font-size: 12px;">
-                            {{ location.latitude }}, {{ location.longitude }}
+                        <td>
+                            <a href="https://www.google.com/maps?q={{ location.latitude }},{{ location.longitude }}"
+                               target="_blank"
+                               style="font-family: monospace; font-size: 12px; color: #3b82f6; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;"
+                               title="Google Maps-də aç">
+                                <i class="fas fa-map-marker-alt" style="font-size: 11px;"></i>
+                                {{ location.latitude }}, {{ location.longitude }}
+                            </a>
                         </td>
                         <td>{{ location.timestamp|date:"d.m.Y H:i:s" }}</td>
                         <td>
