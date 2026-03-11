@@ -3,6 +3,7 @@
 {% block content %}
 <script>
   window.DASHBOARD_API_BASE = "{{ request.scheme }}://{{ request.get_host }}";
+  window.MAPBOX_ACCESS_TOKEN = "{{ mapbox_token|escapejs }}";
 </script>
 <div class="dashboard-content map-page">
     <div class="performance-header">

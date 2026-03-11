@@ -517,11 +517,14 @@ body {
     .map-container { grid-template-columns: 1fr; }
 }
 .map-wrapper {
-    background: rgba(15, 23, 42, 0.8);
+    background: #e8e0d8;
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
+.mapboxgl-popup-content { border-radius: 10px !important; padding: 10px 14px !important; font-family: -apple-system, sans-serif; min-width: 160px; }
+.mapboxgl-popup-tip { display: none !important; }
+.mapboxgl-ctrl-logo { display: none !important; }
 .map-canvas {
     width: 100%;
     height: 560px;

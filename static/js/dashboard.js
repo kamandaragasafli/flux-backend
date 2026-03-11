@@ -155,192 +155,179 @@ document.addEventListener("DOMContentLoaded", function () {
     if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">' + msg + "</div>";
   }
 
+  function getCSRFToken() {
+    const cookies = document.cookie.split(";");
+    for (let c of cookies) {
+      const parts = c.trim().split("=");
+      if (parts[0] === "csrftoken") return parts[1] || "";
+    }
+    return document.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
+  }
+
+  function getMarkerColor(f) {
+    if (f.is_paused) return "#fbbf24";
+    if (f.status === "online") return "#22c55e";
+    if (f.status === "offline") return "#ef4444";
+    return "#6b7280";
+  }
+
+  function getStatusClass(f) {
+    if (f.is_paused) return "status-paused";
+    if (f.status === "online") return "status-online";
+    if (f.status === "offline") return "status-offline";
+    return "status-unknown";
+  }
+
+  function batteryHTML(level) {
+    if (level === null || level === undefined) return "";
+    const pct = Math.max(0, Math.min(100, level));
+    let color = "#22c55e", icon = "🔋";
+    if (pct <= 15) { color = "#ef4444"; icon = "🪫"; }
+    else if (pct <= 30) { color = "#f59e0b"; }
+    return `<span class="battery-badge" style="color:${color}" title="Pil: ${pct}%">${icon} ${pct}%</span>`;
+  }
+
+  function makeMarkerEl(color) {
+    const el = document.createElement("div");
+    el.style.cssText = `width:18px;height:18px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);`;
+    return el;
+  }
+
   function initMap() {
-    if (!mapEl || !window.L) return false;
-    let map = L.map("map", { zoomControl: false }).setView([40.4093, 49.8671], 11);
-    L.control.zoom({ position: "topright" }).addTo(map);
+    if (!mapEl || !window.mapboxgl) return false;
+    const token = window.MAPBOX_ACCESS_TOKEN;
+    if (!token) { setMapUserListError("Mapbox token təyin edilməyib."); return false; }
+    mapboxgl.accessToken = token;
+    const map = new mapboxgl.Map({
+      container: "map",
+      style: "mapbox://styles/mapbox/streets-v12",
+      center: [49.8671, 40.4093],
+      zoom: 11,
+    });
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+
     let markers = {};
-    let polylines = {};
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap © CARTO",
-      subdomains: "abcd",
-    }).addTo(map);
-
-    function getCSRFToken() {
-      const cookies = document.cookie.split(";");
-      for (let c of cookies) {
-        const parts = c.trim().split("=");
-        if (parts[0] === "csrftoken") return parts[1] || "";
-      }
-      return document.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
-    }
-
-    function getMarkerColor(f) {
-      if (f.is_paused) return "#fbbf24";
-      if (f.status === "online") return "#22c55e";
-      if (f.status === "offline") return "#ef4444";
-      return "#6b7280";
-    }
-
-    function getStatusClass(f) {
-      if (f.is_paused) return "status-paused";
-      if (f.status === "online") return "status-online";
-      if (f.status === "offline") return "status-offline";
-      return "status-unknown";
-    }
-
-    /** Pil ikonası HTML-i */
-    function batteryHTML(level) {
-      if (level === null || level === undefined) return "";
-      const pct = Math.max(0, Math.min(100, level));
-      let color = "#22c55e";   // yaşıl
-      let icon  = "🔋";
-      if (pct <= 15) { color = "#ef4444"; icon = "🪫"; }
-      else if (pct <= 30) { color = "#f59e0b"; }
-      return `<span class="battery-badge" style="color:${color}" title="Pil: ${pct}%">${icon} ${pct}%</span>`;
-    }
+    let polylineSourceId = null;
 
     async function loadMapLocations() {
       try {
-        const url = "/api/movqe-son-json/";
-        const res = await fetch(url, {
+        const res = await fetch("/api/movqe-son-json/", {
           credentials: "same-origin",
           headers: { "X-CSRFToken": getCSRFToken() || "" },
         });
         if (!res.ok) {
-          if (res.status === 403) console.warn("[MAP] Admin girişi lazımdır");
           if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">Admin girişi lazımdır</div>';
           return;
         }
         const data = await res.json();
         const features = data.features || [];
 
-        Object.values(markers).forEach((m) => map.removeLayer(m));
-        Object.values(polylines).forEach((p) => map.removeLayer(p));
+        // Markerləri yenilə
+        Object.values(markers).forEach((m) => m.remove());
         markers = {};
-        polylines = {};
 
-        const csrf = getCSRFToken();
+        const pts = [];
         for (const f of features) {
           if (!f.lat || !f.lng) continue;
           const color = getMarkerColor(f);
           const name = f.ad || f.username || "İstifadəçi";
-          const m = L.circleMarker([f.lat, f.lng], {
-            radius: 12,
-            fillColor: color,
-            color: "#fff",
-            weight: 2,
-            fillOpacity: 1,
-          })
-            .addTo(map)
-            .bindPopup(
-              `<div style="padding:8px;min-width:180px;">` +
-              `<b>${name}</b><br>` +
-              `<span style="color:#6b7280;font-size:12px;">${f.is_paused ? "Dayandırılıb" : (f.status === "online" ? "Online" : f.status || "—")}</span>` +
+          const statusTxt = f.is_paused ? "Dayandırılıb" : (f.status === "online" ? "Online" : f.status || "—");
+          const el = makeMarkerEl(color);
+          const popup = new mapboxgl.Popup({ closeButton: false, offset: 14 })
+            .setHTML(
+              `<div style="padding:8px;min-width:180px;font-family:-apple-system,sans-serif;">` +
+              `<b style="font-size:14px;">${name}</b><br>` +
+              `<span style="color:#6b7280;font-size:12px;">${statusTxt}</span>` +
               (f.battery_level !== null && f.battery_level !== undefined
-                ? `<br><span style="font-size:12px;">${batteryHTML(f.battery_level)}</span>`
-                : "") +
+                ? `<br>${batteryHTML(f.battery_level)}` : "") +
               `<br><span style="font-size:11px;color:#9ca3af;">📍 ${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}</span>` +
               `</div>`
             );
-          markers[f.id] = m;
+          markers[f.id] = new mapboxgl.Marker({ element: el, anchor: "center" })
+            .setLngLat([f.lng, f.lat])
+            .setPopup(popup)
+            .addTo(map);
+          pts.push([f.lng, f.lat]);
         }
 
-        if (features.length > 0) {
-          const pts = features.filter((x) => x.lat && x.lng).map((x) => [x.lat, x.lng]);
-          if (pts.length > 0) {
-            try {
-              const bounds = L.latLngBounds(pts);
-              map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
-            } catch (_) {}
-          }
+        // Bütün markerlərə uyğun zoom
+        if (pts.length > 0 && !selectedUserId) {
+          const bounds = pts.reduce((b, p) => b.extend(p), new mapboxgl.LngLatBounds(pts[0], pts[0]));
+          map.fitBounds(bounds, { padding: 60, maxZoom: 16 });
         }
 
-        if (selectedUserId && !features.find((x) => x.id == selectedUserId)) {
-          selectedUserId = null;
+        // Seçilmiş user-in marşrutu
+        if (polylineSourceId) {
+          try { map.removeLayer(polylineSourceId + "-layer"); map.removeSource(polylineSourceId); } catch (_) {}
+          polylineSourceId = null;
         }
+        if (selectedUserId && !features.find((x) => x.id == selectedUserId)) selectedUserId = null;
+
         if (selectedUserId) {
           const sel = features.find((x) => x.id == selectedUserId);
           if (sel) {
             try {
               const rRes = await fetch("/api/routes/?user=" + selectedUserId, {
                 credentials: "same-origin",
-                headers: { "X-CSRFToken": csrf || "" },
+                headers: { "X-CSRFToken": getCSRFToken() || "" },
               });
               if (rRes.ok) {
                 const rData = await rRes.json();
                 const routes = Array.isArray(rData) ? rData : rData.results || [];
                 const active = routes.find((r) => !r.end_time) || routes[routes.length - 1];
                 if (active && active.points && active.points.length > 1) {
-                  const pts = active.points.map((p) => [parseFloat(p.latitude), parseFloat(p.longitude)]);
-                  const pl = L.polyline(pts, {
-                    color: getMarkerColor(sel),
-                    weight: 4,
-                    opacity: 0.8,
-                    dashArray: sel.is_paused ? "10,5" : null,
-                  }).addTo(map);
-                  polylines[selectedUserId] = pl;
+                  const coords = active.points.map((p) => [parseFloat(p.longitude), parseFloat(p.latitude)]);
+                  const srcId = "route-" + selectedUserId;
+                  map.addSource(srcId, { type: "geojson", data: { type: "Feature", geometry: { type: "LineString", coordinates: coords } } });
+                  map.addLayer({ id: srcId + "-layer", type: "line", source: srcId, paint: {
+                    "line-color": getMarkerColor(sel), "line-width": 4, "line-opacity": 0.85,
+                    ...( sel.is_paused ? { "line-dasharray": [2, 2] } : {} )
+                  }});
+                  polylineSourceId = srcId;
+                  const bounds2 = coords.reduce((b, c) => b.extend(c), new mapboxgl.LngLatBounds(coords[0], coords[0]));
+                  map.fitBounds(bounds2, { padding: 60, maxZoom: 16 });
                   if (userProfileEl) {
                     const startT = active.start_time ? new Date(active.start_time).toLocaleString("az-AZ") : "—";
                     const endT = active.end_time ? new Date(active.end_time).toLocaleString("az-AZ") : "Davam edir";
-                    userProfileEl.innerHTML =
-                      `<div class="map-user-profile-box">` +
-                      `<div class="map-user-profile-title"><i class="fas fa-route"></i> ${sel.ad || sel.username || "İstifadəçi"} — Marşrut</div>` +
-                      `<div class="map-user-profile-row">Başlanğıc: ${startT}</div>` +
-                      `<div class="map-user-profile-row">Bitmə: ${endT}</div>` +
-                      `<div class="map-user-profile-row">Nöqtələr: ${active.points.length}</div>` +
-                      `</div>`;
+                    userProfileEl.innerHTML = `<div class="map-user-profile-box"><div class="map-user-profile-title"><i class="fas fa-route"></i> ${sel.ad || sel.username} — Marşrut</div><div class="map-user-profile-row">Başlanğıc: ${startT}</div><div class="map-user-profile-row">Bitmə: ${endT}</div><div class="map-user-profile-row">Nöqtələr: ${active.points.length}</div></div>`;
                     userProfileEl.style.display = "block";
                   }
                 } else if (userProfileEl) {
-                  userProfileEl.innerHTML = `<div class="map-user-profile-box"><div class="map-user-profile-title">${sel.ad || sel.username} — Marşrut məlumatı yoxdur</div></div>`;
+                  userProfileEl.innerHTML = `<div class="map-user-profile-box"><div class="map-user-profile-title">${sel.ad || sel.username} — Marşrut yoxdur</div></div>`;
                   userProfileEl.style.display = "block";
                 }
               }
             } catch (_) {}
+            if (markers[selectedUserId]) markers[selectedUserId].togglePopup();
           } else if (userProfileEl) userProfileEl.style.display = "none";
         } else if (userProfileEl) userProfileEl.style.display = "none";
 
+        // Siyahı
         if (userListEl) {
           if (features.length === 0) {
             userListEl.innerHTML = '<div class="map-empty-hint">İstifadəçi yoxdur</div>';
           } else {
-            userListEl.innerHTML = features
-              .map((f) => {
-                const hasLoc = f.lat != null && f.lng != null;
-                const clickable = hasLoc ? " map-user-item-clickable" : "";
-                const batHtml = batteryHTML(f.battery_level);
-                return `<div class="map-user-item${clickable}" data-user-id="${f.id}" data-lat="${f.lat ?? ""}" data-lng="${f.lng ?? ""}">
-                  <span class="status-dot ${getStatusClass(f)}"></span>
-                  <span class="map-user-name">${f.ad || f.username || "İstifadəçi"}</span>
-                  ${batHtml ? `<span class="map-user-battery">${batHtml}</span>` : ""}
-                </div>`;
-              })
-              .join("");
+            userListEl.innerHTML = features.map((f) => {
+              const hasLoc = f.lat != null && f.lng != null;
+              const clickable = hasLoc ? " map-user-item-clickable" : "";
+              const bat = batteryHTML(f.battery_level);
+              const isSelected = f.id == selectedUserId;
+              return `<div class="map-user-item${clickable}${isSelected ? " selected" : ""}" data-user-id="${f.id}" data-lat="${f.lat ?? ""}" data-lng="${f.lng ?? ""}">
+                <span class="status-dot ${getStatusClass(f)}"></span>
+                <span class="map-user-name">${f.ad || f.username || "İstifadəçi"}</span>
+                ${bat ? `<span class="map-user-battery">${bat}</span>` : ""}
+              </div>`;
+            }).join("");
             userListEl.querySelectorAll(".map-user-item-clickable").forEach((el) => {
               el.addEventListener("click", function () {
                 const uid = this.dataset.userId;
                 const lat = parseFloat(this.dataset.lat);
                 const lng = parseFloat(this.dataset.lng);
                 selectedUserId = selectedUserId == uid ? null : uid;
-                document.querySelectorAll(".map-user-item").forEach((e) => e.classList.remove("selected"));
-                if (selectedUserId) this.classList.add("selected");
-                loadMapLocations().then(function () {
-                  if (!isNaN(lat) && !isNaN(lng) && markers[uid]) {
-                    if (selectedUserId && polylines[uid]) {
-                      try {
-                        const bounds = polylines[uid].getBounds();
-                        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
-                      } catch (_) {
-                        map.setView([lat, lng], 15);
-                      }
-                    } else {
-                      map.setView([lat, lng], 15);
-                    }
-                    if (markers[uid]) markers[uid].openPopup();
-                  }
-                });
+                loadMapLocations();
+                if (!selectedUserId && !isNaN(lat) && !isNaN(lng)) {
+                  map.flyTo({ center: [lng, lat], zoom: 15, speed: 1.4 });
+                }
               });
             });
           }
@@ -351,18 +338,19 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    loadMapLocations();
-    setInterval(loadMapLocations, 10000);
-    setTimeout(function () { if (map && map.invalidateSize) map.invalidateSize(); }, 500);
+    map.on("load", function () {
+      loadMapLocations();
+      setInterval(loadMapLocations, 10000);
+    });
     return true;
   }
 
-  if (!window.L) {
+  if (!window.mapboxgl) {
     var waitCount = 0;
-    var waitL = setInterval(function () {
+    var waitMb = setInterval(function () {
       waitCount++;
-      if (window.L) { clearInterval(waitL); initMap(); }
-      else if (waitCount > 50) { clearInterval(waitL); setMapUserListError("Xəritə kitabxanası yüklənə bilmədi."); }
+      if (window.mapboxgl) { clearInterval(waitMb); initMap(); }
+      else if (waitCount > 50) { clearInterval(waitMb); setMapUserListError("Xəritə yüklənə bilmədi."); }
     }, 100);
   } else {
     initMap();

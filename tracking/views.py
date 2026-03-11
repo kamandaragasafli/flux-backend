@@ -739,8 +739,10 @@ def admin_dashboard_notifications(request):
 @user_passes_test(is_staff_user)
 def admin_dashboard_map(request):
     """Admin dashboard - xəritə"""
+    from django.conf import settings
     context = {
         "active_page": "map",
+        "mapbox_token": getattr(settings, "MAPBOX_ACCESS_TOKEN", "") or "",
     }
     return render(request, "dashboard_map.html", context)
 
