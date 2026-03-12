@@ -1,0 +1,121 @@
+{% extends "dashboard_base.html" %}
+{% block content %}
+<div class="dashboard-content">
+
+    <div class="performance-header">
+        <div class="performance-title">Görülən apteklər</div>
+        <div class="performance-main-title">Aptek Hesabatı</div>
+    </div>
+
+    <!-- Filter form -->
+    <div class="section-card" style="margin-bottom:24px;">
+        <form method="get" style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;">
+            <div style="display:flex;flex-direction:column;gap:6px;min-width:200px;">
+                <label style="font-size:13px;color:rgba(255,255,255,0.6);">İstifadəçi</label>
+                <select name="user_id" style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);font-size:14px;">
+                    <option value="">— Hamısı —</option>
+                    {% for u in all_users %}
+                    <option value="{{ u.id }}" {% if sel_user_id == u.id|stringformat:"s" %}selected{% endif %}>{{ u.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <label style="font-size:13px;color:rgba(255,255,255,0.6);">Tarixdən</label>
+                <input type="date" name="date_from" value="{{ date_from }}"
+                    style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);font-size:14px;color-scheme:dark;">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <label style="font-size:13px;color:rgba(255,255,255,0.6);">Tarixə qədər</label>
+                <input type="date" name="date_to" value="{{ date_to }}"
+                    style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);font-size:14px;color-scheme:dark;">
+            </div>
+            <button type="submit"
+                style="padding:9px 20px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+                <i class="fas fa-search"></i> Göstər
+            </button>
+            {% if rows %}
+            <a href="?user_id={{ sel_user_id }}&date_from={{ date_from }}&date_to={{ date_to }}&export=excel"
+                style="padding:9px 20px;background:#22c55e;color:#fff;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+                <i class="fas fa-file-excel"></i> Excel
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" style="margin-bottom:24px;">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon blue"><i class="fas fa-prescription-bottle-alt"></i></div>
+                <div class="stat-label">Ziyarət sayı</div>
+            </div>
+            <div class="stat-value">{{ total_visits }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon green"><i class="fas fa-pills"></i></div>
+                <div class="stat-label">Dərman növü</div>
+            </div>
+            <div class="stat-value">{{ medicine_cols|length }}</div>
+        </div>
+    </div>
+
+    <!-- Pivot table -->
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">Hesabat cədvəli</div>
+            <div style="color:rgba(255,255,255,0.5);font-size:13px;">Hər sütun – bir dərman; dəyər – sayı</div>
+        </div>
+        {% if rows %}
+        <div style="overflow-x:auto;">
+            <table class="data-table" style="min-width:600px;">
+                <thead>
+                    <tr>
+                        <th style="min-width:44px;">№</th>
+                        <th style="min-width:180px;">Aptek adı</th>
+                        <th style="min-width:90px;">Status</th>
+                        {% for _, mname in medicine_cols %}
+                        <th style="min-width:120px;">{{ mname }}</th>
+                        {% endfor %}
+                        <th style="min-width:70px; background:rgba(59,130,246,0.2);">Cəm</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr>
+                        <td>{{ r.no }}</td>
+                        <td><strong>{{ r.visit.pharmacy_name }}</strong></td>
+                        <td>
+                            {% if r.visit.visit_type == 'sale' %}
+                            <span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:3px 8px;border-radius:4px;font-size:12px;">Satış</span>
+                            {% else %}
+                            <span style="background:rgba(59,130,246,0.15);color:#3b82f6;padding:3px 8px;border-radius:4px;font-size:12px;">Sifariş</span>
+                            {% endif %}
+                        </td>
+                        {% for qty in r.qtys %}
+                        <td style="text-align:center;">{{ qty|default:"0" }}</td>
+                        {% endfor %}
+                        <td style="text-align:center;font-weight:700;color:#3b82f6;">{{ r.total }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr style="background:rgba(255,255,255,0.05);">
+                        <td colspan="3" style="font-weight:700;text-align:right;padding-right:12px;">Cəmi:</td>
+                        {% for ct in col_totals %}
+                        <td style="text-align:center;font-weight:700;">{{ ct }}</td>
+                        {% endfor %}
+                        <td style="text-align:center;font-weight:700;color:#3b82f6;">{{ grand_total }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-prescription-bottle-alt"></i>
+            <p>Seçilmiş filtrlərə uyğun məlumat tapılmadı</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification
+from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification, VisitedPharmacy, VisitedPharmacyItem
 
 
 @admin.register(Route)
@@ -122,6 +122,21 @@ class CustomUserAdmin(BaseUserAdmin):
 # Unregister default User admin and register custom one
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
+
+class VisitedPharmacyItemInline(admin.TabularInline):
+    model = VisitedPharmacyItem
+    extra = 0
+    raw_id_fields = ['medicine']
+
+
+@admin.register(VisitedPharmacy)
+class VisitedPharmacyAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'pharmacy_name', 'visit_type', 'effective_medicine_name', 'visit_date']
+    list_filter = ['visit_type', 'visit_date']
+    search_fields = ['user__username', 'pharmacy_name']
+    readonly_fields = ['visit_date']
+    inlines = [VisitedPharmacyItemInline]
+
 
 # Customize admin site
 admin.site.site_header = "Solvey Tracker Admin Panel"

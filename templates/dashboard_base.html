@@ -9,7 +9,9 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-    <!-- Mapbox GL JS -->
+    <!-- Leaflet (local - etibarlı) + Mapbox (cəhd) -->
+    <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}"/>
+    <script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 
@@ -70,6 +72,12 @@
                 <a href="{% url 'dashboard_visited_doctors' %}" class="nav-link {% if active_page == 'visited_doctors' %}active{% endif %}">
                     <i class="fas fa-stethoscope"></i>
                     <span>GÖRÜLƏN HƏKİMLƏR</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_visited_pharmacies' %}" class="nav-link {% if active_page == 'visited_pharmacies' %}active{% endif %}">
+                    <i class="fas fa-prescription-bottle-alt"></i>
+                    <span>GÖRÜLƏN APTEKLƏR</span>
                 </a>
             </li>
         </ul>

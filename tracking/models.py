@@ -272,6 +272,65 @@ class Medicine(models.Model):
         return self.name or self.name_az
 
 
+class VisitedPharmacy(models.Model):
+    """İstifadəçinin görülən aptekləri"""
+
+    VISIT_TYPE_CHOICES = [
+        ('sale', 'Satış'),
+        ('order', 'Sifariş'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="visited_pharmacies"
+    )
+    pharmacy_name = models.CharField(max_length=255, verbose_name="Aptek adı")
+    visit_type = models.CharField(max_length=20, choices=VISIT_TYPE_CHOICES, verbose_name="Növü")
+    notes = models.TextField(blank=True, verbose_name="Qeyd")
+    visit_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-visit_date']
+        verbose_name = "Görülən Aptek"
+        verbose_name_plural = "Görülən Apteklər"
+
+    def __str__(self) -> str:
+        items = list(self.items.select_related('medicine').all()[:3])
+        meds = ", ".join(f"{i.medicine.name or i.medicine.name_az} x{i.quantity}" for i in items if i.medicine)
+        return f"{self.user.username} - {self.pharmacy_name} ({meds or '—'})"
+
+    @property
+    def effective_medicine_name(self):
+        """Display summary for backward compat / list view"""
+        items = list(self.items.select_related('medicine').all())
+        if not items:
+            return "—"
+        parts = [f"{i.medicine.name or i.medicine.name_az} x{i.quantity}" for i in items if i.medicine]
+        return ", ".join(parts) if parts else "—"
+
+
+class VisitedPharmacyItem(models.Model):
+    """Bir aptek ziyarətində alınan dərman + miqdar"""
+
+    visited_pharmacy = models.ForeignKey(
+        VisitedPharmacy,
+        on_delete=models.CASCADE,
+        related_name="items"
+    )
+    medicine = models.ForeignKey(
+        'Medicine',
+        on_delete=models.CASCADE,
+        related_name="pharmacy_visit_items"
+    )
+    quantity = models.PositiveIntegerField(default=1, verbose_name="Say")
+
+    class Meta:
+        verbose_name = "Aptek dərmanı"
+        verbose_name_plural = "Aptek dərmanları"
+        unique_together = [['visited_pharmacy', 'medicine']]
+
+
 class LocationPermissionReport(models.Model):
     """Konum icazəsi rədd edildikdə istifadəçinin səbəb bildirməsi"""
     

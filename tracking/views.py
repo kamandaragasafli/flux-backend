@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from django.db.models import Max, Count, Q
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
-from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.decorators import user_passes_test, login_required
 from django.utils import timezone
 from datetime import timedelta
 import requests
@@ -1770,3 +1770,289 @@ def get_medicine_detail(request, medicine_id):
             'error': str(e),
             'traceback': error_trace
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ------------------------------------------------------------------------------
+# Visited Pharmacies
+# ------------------------------------------------------------------------------
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_visited_pharmacy(request):
+    """
+    Gorulen aptek elave et
+    POST /api/visited-pharmacies/
+    Body: pharmacy_name, visit_type, notes, items: [{medicine_id, quantity}, ...]
+    """
+    try:
+        from .models import VisitedPharmacy, VisitedPharmacyItem
+        from .serializers import VisitedPharmacySerializer
+        user = request.user
+        data = request.data
+
+        pharmacy_name = data.get('pharmacy_name', '').strip()
+        visit_type = data.get('visit_type', '')
+        notes = data.get('notes', '').strip()
+        items_data = data.get('items') or []
+
+        if not pharmacy_name:
+            return Response({'success': False, 'error': 'pharmacy_name is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if visit_type not in ('sale', 'order'):
+            return Response({'success': False, 'error': 'visit_type must be sale or order'}, status=status.HTTP_400_BAD_REQUEST)
+        if not items_data or not isinstance(items_data, list):
+            return Response({'success': False, 'error': 'items (minimum 1 dərman) tələb olunur'}, status=status.HTTP_400_BAD_REQUEST)
+
+        pharmacy_visit = VisitedPharmacy.objects.create(
+            user=user,
+            pharmacy_name=pharmacy_name,
+            visit_type=visit_type,
+            notes=notes,
+        )
+
+        for it in items_data:
+            mid = it.get('medicine_id')
+            qty = int(it.get('quantity', 1) or 1)
+            if not mid or qty < 1:
+                continue
+            med = Medicine.objects.filter(id=mid).first()
+            if med:
+                VisitedPharmacyItem.objects.update_or_create(
+                    visited_pharmacy=pharmacy_visit,
+                    medicine=med,
+                    defaults={'quantity': qty}
+                )
+
+        pharmacy_visit.refresh_from_db()
+        logger.info(f"[VISITED_PHARMACY] Added for user {user.username}: {pharmacy_name}")
+        return Response({
+            'success': True,
+            'message': 'Aptek gorulen apteklere elave edildi',
+            'data': VisitedPharmacySerializer(pharmacy_visit).data,
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        logger.error(f"[VISITED_PHARMACY] Error: {e}")
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_visited_pharmacies(request):
+    """
+    Istifadecinin gorulen apteklerini getir
+    GET /api/visited-pharmacies/list/
+    """
+    try:
+        from .models import VisitedPharmacy
+        from .serializers import VisitedPharmacySerializer
+        visits = VisitedPharmacy.objects.filter(user=request.user).prefetch_related('items__medicine')
+        return Response({'success': True, 'data': VisitedPharmacySerializer(visits, many=True).data})
+    except Exception as e:
+        logger.error(f"[VISITED_PHARMACY] Error listing: {e}")
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_visited_pharmacy(request, pk):
+    """
+    Gorulen apteki sil
+    DELETE /api/visited-pharmacies/<pk>/delete/
+    """
+    try:
+        from .models import VisitedPharmacy
+        visit = VisitedPharmacy.objects.filter(id=pk, user=request.user).first()
+        if not visit:
+            return Response({'success': False, 'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        visit.delete()
+        return Response({'success': True})
+    except Exception as e:
+        logger.error(f"[VISITED_PHARMACY] Error deleting {pk}: {e}")
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@login_required
+@user_passes_test(is_staff_user)
+def admin_dashboard_visited_pharmacies(request):
+    """Dashboard: gorulen aptekler – pivot hesabat + Excel export"""
+    from .models import VisitedPharmacy
+    from datetime import datetime, date
+
+    all_users = User.objects.filter(is_active=True).order_by('username')
+
+    # Filter params
+    sel_user_id = request.GET.get('user_id', '')
+    date_from   = request.GET.get('date_from', '')
+    date_to     = request.GET.get('date_to', '')
+    export      = request.GET.get('export') == 'excel'
+
+    visits_qs = VisitedPharmacy.objects.prefetch_related('items__medicine').order_by('visit_date')
+
+    if sel_user_id:
+        visits_qs = visits_qs.filter(user_id=sel_user_id)
+
+    if date_from:
+        try:
+            visits_qs = visits_qs.filter(visit_date__date__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            visits_qs = visits_qs.filter(visit_date__date__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+
+    visits = list(visits_qs)
+
+    # Collect all unique medicines in result set (preserve insertion order)
+    med_map = {}  # id -> name
+    for v in visits:
+        for it in v.items.all():
+            if it.medicine_id not in med_map:
+                med_map[it.medicine_id] = it.medicine.name or it.medicine.name_az or f"ID:{it.medicine_id}"
+
+    medicine_cols = list(med_map.items())  # [(id, name), ...]
+
+    # Build pivot rows
+    rows = []
+    for idx, v in enumerate(visits, 1):
+        item_qty = {it.medicine_id: it.quantity for it in v.items.all()}
+        qty_list = [item_qty.get(mid, 0) for mid, _ in medicine_cols]
+        total = sum(qty_list)
+        rows.append({
+            'no': idx,
+            'visit': v,
+            'qtys': qty_list,
+            'total': total,
+        })
+
+    if export and rows:
+        try:
+            from openpyxl import Workbook
+            from openpyxl.utils import get_column_letter
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.worksheet.worksheet import Worksheet
+            from io import BytesIO
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "AptekHesabati"
+
+            # Header style
+            hdr_font  = Font(bold=True, color="FFFFFF", size=11)
+            hdr_fill  = PatternFill("solid", fgColor="1D4ED8")
+            hdr_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            thin = Side(style="thin", color="D1D5DB")
+            bdr  = Border(left=thin, right=thin, top=thin, bottom=thin)
+            tot_fill = PatternFill("solid", fgColor="EEF2FF")
+            tot_font = Font(bold=True, color="1D4ED8")
+
+            header = ["№", "Aptek adı", "Status"] + [mname for _, mname in medicine_cols] + ["Cəm"]
+            for col, val in enumerate(header, 1):
+                cell = ws.cell(row=1, column=col, value=val)
+                cell.font = hdr_font; cell.fill = hdr_fill
+                cell.alignment = hdr_align; cell.border = bdr
+
+            # Data rows
+            for r in rows:
+                row_data = [
+                    r['no'],
+                    r['visit'].pharmacy_name,
+                    r['visit'].get_visit_type_display(),
+                ] + r['qtys'] + [r['total']]
+                for col, val in enumerate(row_data, 1):
+                    cell = ws.cell(row=r['no'] + 1, column=col, value=val)
+                    cell.border = bdr
+                    cell.alignment = Alignment(horizontal="center" if col != 2 else "left", vertical="center")
+
+            # Totals row (same as dashboard footer)
+            col_totals = [sum(r['qtys'][i] for r in rows) for i in range(len(medicine_cols))]
+            grand_total = sum(r['total'] for r in rows)
+            total_row_idx = len(rows) + 2
+
+            ws.cell(row=total_row_idx, column=1, value="Cəmi:").font = tot_font
+            ws.cell(row=total_row_idx, column=1).fill = tot_fill
+            ws.cell(row=total_row_idx, column=1).border = bdr
+            ws.cell(row=total_row_idx, column=1).alignment = Alignment(horizontal="right", vertical="center")
+            # Merge A..C for label
+            ws.merge_cells(start_row=total_row_idx, start_column=1, end_row=total_row_idx, end_column=3)
+            for c in range(1, 4):
+                cell = ws.cell(row=total_row_idx, column=c)
+                cell.fill = tot_fill
+                cell.border = bdr
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+
+            for i, ct in enumerate(col_totals):
+                cell = ws.cell(row=total_row_idx, column=4 + i, value=ct)
+                cell.font = tot_font
+                cell.fill = tot_fill
+                cell.border = bdr
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            cell = ws.cell(row=total_row_idx, column=4 + len(medicine_cols), value=grand_total)
+            cell.font = tot_font
+            cell.fill = tot_fill
+            cell.border = bdr
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # Column widths
+            ws.column_dimensions["A"].width = 6
+            ws.column_dimensions["B"].width = 28
+            ws.column_dimensions["C"].width = 12
+            for i in range(len(medicine_cols)):
+                ws.column_dimensions[get_column_letter(4 + i)].width = 18
+            ws.column_dimensions[get_column_letter(4 + len(medicine_cols))].width = 10
+            ws.row_dimensions[1].height = 40
+            ws.freeze_panes = "A2"
+
+            bio = BytesIO()
+            wb.save(bio); bio.seek(0)
+            from django.http import HttpResponse
+            fname = f"aptek-hesabati-{date.today().strftime('%Y%m%d')}.xlsx"
+            resp = HttpResponse(bio.getvalue(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+            return resp
+        except Exception as exc:
+            logger.exception("[PHARMACY_REPORT] Excel export error")
+
+    # Per-column totals and grand total
+    col_totals = [sum(r['qtys'][i] for r in rows) for i in range(len(medicine_cols))]
+    grand_total = sum(r['total'] for r in rows)
+
+    context = {
+        'active_page': 'visited_pharmacies',
+        'all_users': all_users,
+        'sel_user_id': sel_user_id,
+        'date_from': date_from,
+        'date_to': date_to,
+        'medicine_cols': medicine_cols,
+        'rows': rows,
+        'col_totals': col_totals,
+        'grand_total': grand_total,
+        'total_visits': len(rows),
+    }
+    return render(request, 'dashboard_visited_pharmacies.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_user)
+def admin_dashboard_visited_pharmacies_user(request, user_id):
+    """Dashboard: bir istifadecinin gorulen aptekleri"""
+    from .models import VisitedPharmacy
+    user = get_object_or_404(User, id=user_id)
+    filter_param = request.GET.get('filter', 'all')
+    if filter_param not in ('today', 'week', 'all'):
+        filter_param = 'all'
+    visits = VisitedPharmacy.objects.filter(user=user).prefetch_related('items__medicine').order_by('-visit_date')
+    threshold = _get_date_filter_threshold(filter_param)
+    if threshold:
+        visits = visits.filter(visit_date__gte=threshold)
+    total = visits.count()
+    context = {
+        'active_page': 'visited_pharmacies',
+        'profile_user': user,
+        'visits': visits,
+        'total': total,
+        'filter_param': filter_param,
+    }
+    return render(request, 'dashboard_visited_pharmacies_user.html', context)

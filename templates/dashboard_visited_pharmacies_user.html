@@ -1,0 +1,63 @@
+{% extends "dashboard_base.html" %}
+
+{% block content %}
+<div class="dashboard-content">
+    <div class="performance-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+        <div>
+            <a href="{% url 'dashboard_visited_pharmacies' %}?filter={{ filter_param|default:'today' }}" style="color: rgba(255,255,255,0.6); font-size: 13px; text-decoration: none; margin-bottom: 8px; display: inline-block;">
+                <i class="fas fa-arrow-left"></i> Görülən apteklərə qayıt
+            </a>
+            <div class="performance-title">İstifadəçi: {{ profile_user.username }}</div>
+            <div class="performance-main-title">Görülən apteklər ({{ total }})</div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <a href="?filter=today" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; {% if filter_param == 'today' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Bu gün</a>
+            <a href="?filter=week" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; {% if filter_param == 'week' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Bu həftə</a>
+            <a href="?filter=all" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 13px; {% if filter_param == 'all' %}background: #3b82f6; color: white;{% else %}background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);{% endif %}">Hamısı</a>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">Aptek ziyarət tarixçəsi</div>
+        </div>
+        {% if visits %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>TARİX / SAAT</th>
+                        <th>APTEK ADI</th>
+                        <th>NÖVÜ</th>
+                        <th>DƏRMAN</th>
+                        <th>QEYD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in visits %}
+                    <tr>
+                        <td>{{ v.visit_date|date:"d.m.Y H:i" }}</td>
+                        <td><strong>{{ v.pharmacy_name|default:"—" }}</strong></td>
+                        <td>
+                            {% if v.visit_type == 'sale' %}
+                            <span style="background: rgba(34,197,94,0.15); color: #22c55e; padding: 3px 8px; border-radius: 4px; font-size: 12px;">Satış</span>
+                            {% else %}
+                            <span style="background: rgba(59,130,246,0.15); color: #3b82f6; padding: 3px 8px; border-radius: 4px; font-size: 12px;">Sifariş</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ v.effective_medicine_name|default:"—" }}</td>
+                        <td>{{ v.notes|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-prescription-bottle-alt"></i>
+            <p>Bu istifadəçinin görülən aptek qeydi yoxdur</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

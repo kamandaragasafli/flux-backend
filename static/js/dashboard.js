@@ -345,15 +345,101 @@ document.addEventListener("DOMContentLoaded", function () {
     return true;
   }
 
-  if (!window.mapboxgl) {
-    var waitCount = 0;
-    var waitMb = setInterval(function () {
-      waitCount++;
-      if (window.mapboxgl) { clearInterval(waitMb); initMap(); }
-      else if (waitCount > 50) { clearInterval(waitMb); setMapUserListError("Xəritə yüklənə bilmədi."); }
-    }, 100);
-  } else {
-    initMap();
+  function tryInit() {
+    const token = window.MAPBOX_ACCESS_TOKEN;
+    if (window.mapboxgl && token) {
+      const r = initMap();
+      if (r) return;
+    }
+    if (window.L) initLeaflet();
+    else setMapUserListError("Xəritə yüklənə bilmədi.");
+  }
+
+  var waitCount = 0;
+  var t = setInterval(function () {
+    waitCount++;
+    if (window.mapboxgl || window.L) {
+      clearInterval(t);
+      tryInit();
+    } else if (waitCount > 30) {
+      clearInterval(t);
+      if (window.L) initLeaflet();
+      else setMapUserListError("Xəritə yüklənə bilmədi.");
+    }
+  }, 100);
+
+  function initLeaflet() {
+    if (!mapEl || !window.L) return false;
+    const map = L.map("map", { zoomControl: false }).setView([40.4093, 49.8671], 11);
+    L.control.zoom({ position: "topright" }).addTo(map);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      maxZoom: 19,
+      attribution: "© OpenStreetMap © CARTO"
+    }).addTo(map);
+    let markers = {};
+    let polylines = {};
+    const popupHtml = (f) => `<div style="padding:8px;min-width:180px;"><b>${f.ad || f.username || "İstifadəçi"}</b><br><span style="color:#6b7280;font-size:12px;">${f.is_paused ? "Dayandırılıb" : (f.status === "online" ? "Online" : f.status || "—")}</span>${f.battery_level != null ? "<br>" + batteryHTML(f.battery_level) : ""}<br><span style="font-size:11px;color:#9ca3af;">📍 ${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}</span></div>`;
+    async function load() {
+      try {
+        const res = await fetch("/api/movqe-son-json/", { credentials: "same-origin", headers: { "X-CSRFToken": getCSRFToken() || "" } });
+        if (!res.ok) { if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">Admin girişi lazımdır</div>'; return; }
+        const data = await res.json();
+        const features = data.features || [];
+        Object.values(markers).forEach((m) => map.removeLayer(m));
+        Object.values(polylines).forEach((p) => map.removeLayer(p));
+        markers = {};
+        polylines = {};
+        const pts = [];
+        for (const f of features) {
+          if (!f.lat || !f.lng) continue;
+          const color = getMarkerColor(f);
+          const m = L.circleMarker([f.lat, f.lng], { radius: 12, fillColor: color, color: "#fff", weight: 2, fillOpacity: 1 }).addTo(map).bindPopup(popupHtml(f));
+          markers[f.id] = m;
+          pts.push([f.lat, f.lng]);
+        }
+        if (pts.length > 0 && !selectedUserId) {
+          try { map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 16 }); } catch (_) {}
+        }
+        if (selectedUserId) {
+          const sel = features.find((x) => x.id == selectedUserId);
+          if (sel) {
+            try {
+              const rRes = await fetch("/api/routes/?user=" + selectedUserId, { credentials: "same-origin", headers: { "X-CSRFToken": getCSRFToken() || "" } });
+              if (rRes.ok) {
+                const rData = await rRes.json();
+                const routes = Array.isArray(rData) ? rData : rData.results || [];
+                const active = routes.find((r) => !r.end_time) || routes[routes.length - 1];
+                if (active && active.points && active.points.length > 1) {
+                  const linePts = active.points.map((p) => [parseFloat(p.latitude), parseFloat(p.longitude)]);
+                  polylines[selectedUserId] = L.polyline(linePts, { color: getMarkerColor(sel), weight: 4, opacity: 0.8, dashArray: sel.is_paused ? "10,5" : null }).addTo(map);
+                  map.fitBounds(L.latLngBounds(linePts), { padding: [40, 40], maxZoom: 16 });
+                  if (userProfileEl) { userProfileEl.innerHTML = `<div class="map-user-profile-box"><div class="map-user-profile-title"><i class="fas fa-route"></i> ${sel.ad || sel.username} — Marşrut</div></div>`; userProfileEl.style.display = "block"; }
+                }
+              }
+            } catch (_) {}
+            if (markers[selectedUserId]) markers[selectedUserId].openPopup();
+          } else if (userProfileEl) userProfileEl.style.display = "none";
+        } else if (userProfileEl) userProfileEl.style.display = "none";
+        if (userListEl) {
+          if (features.length === 0) userListEl.innerHTML = '<div class="map-empty-hint">İstifadəçi yoxdur</div>';
+          else {
+            userListEl.innerHTML = features.map((f) => { const hasLoc = f.lat != null && f.lng != null; const c = hasLoc ? " map-user-item-clickable" : ""; const bat = batteryHTML(f.battery_level); const sel = f.id == selectedUserId ? " selected" : ""; return `<div class="map-user-item${c}${sel}" data-user-id="${f.id}" data-lat="${f.lat ?? ""}" data-lng="${f.lng ?? ""}"><span class="status-dot ${getStatusClass(f)}"></span><span class="map-user-name">${f.ad || f.username || "İstifadəçi"}</span>${bat ? `<span class="map-user-battery">${bat}</span>` : ""}</div>`; }).join("");
+            userListEl.querySelectorAll(".map-user-item-clickable").forEach((el) => {
+              el.addEventListener("click", function () {
+                const uid = this.dataset.userId, lat = parseFloat(this.dataset.lat), lng = parseFloat(this.dataset.lng);
+                selectedUserId = selectedUserId == uid ? null : uid;
+                document.querySelectorAll(".map-user-item").forEach((e) => e.classList.remove("selected"));
+                if (selectedUserId) this.classList.add("selected");
+                load().then(function () { if (!isNaN(lat) && !isNaN(lng) && markers[uid]) { map.setView([lat, lng], 15); markers[uid].openPopup(); } });
+              });
+            });
+          }
+        }
+      } catch (e) { if (userListEl) userListEl.innerHTML = '<div class="map-empty-hint">Yükləmə xətası</div>'; }
+    }
+    load();
+    setInterval(load, 10000);
+    return true;
   }
 });
 

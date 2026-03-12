@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 
-from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification, Medicine
+from .models import Route, LocationPoint, VisitSchedule, HospitalVisit, UserProfile, Notification, Medicine, VisitedPharmacy, VisitedPharmacyItem
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -297,3 +297,36 @@ class MedicineSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class VisitedPharmacyItemSerializer(serializers.ModelSerializer):
+    medicine_detail = MedicineSerializer(source='medicine', read_only=True)
+    medicine_name = serializers.SerializerMethodField()
+
+    def get_medicine_name(self, obj):
+        return (obj.medicine.name or obj.medicine.name_az) if obj.medicine else ""
+
+    class Meta:
+        model = VisitedPharmacyItem
+        fields = ['id', 'medicine', 'medicine_detail', 'medicine_name', 'quantity']
+        read_only_fields = ['id']
+
+
+class VisitedPharmacySerializer(serializers.ModelSerializer):
+    effective_medicine_name = serializers.ReadOnlyField()
+    visit_type_display = serializers.CharField(source='get_visit_type_display', read_only=True)
+    items = VisitedPharmacyItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VisitedPharmacy
+        fields = [
+            'id',
+            'pharmacy_name',
+            'visit_type',
+            'visit_type_display',
+            'items',
+            'effective_medicine_name',
+            'notes',
+            'visit_date',
+        ]
+        read_only_fields = ['id', 'visit_date']

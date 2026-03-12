@@ -33,6 +33,8 @@ from .views import (
     admin_dashboard_reports,
     admin_dashboard_visited_doctors,
     admin_dashboard_visited_doctors_user,
+    admin_dashboard_visited_pharmacies,
+    admin_dashboard_visited_pharmacies_user,
 )
 
 # Router for ViewSets
@@ -70,6 +72,8 @@ urlpatterns = [
     path("dashboard/reports/", admin_dashboard_reports, name="dashboard_reports"),
     path("dashboard/visited-doctors/", admin_dashboard_visited_doctors, name="dashboard_visited_doctors"),
     path("dashboard/visited-doctors/user/<int:user_id>/", admin_dashboard_visited_doctors_user, name="dashboard_visited_doctors_user"),
+    path("dashboard/visited-pharmacies/", admin_dashboard_visited_pharmacies, name="dashboard_visited_pharmacies"),
+    path("dashboard/visited-pharmacies/user/<int:user_id>/", admin_dashboard_visited_pharmacies_user, name="dashboard_visited_pharmacies_user"),
     path("user-dashboard/", views.user_dashboard, name="user-dashboard"),
     # External data endpoints (Solvey Pharma)
     path("external/users/", views_external.external_users, name="external-users"),
@@ -95,6 +99,10 @@ urlpatterns = [
     # Medicines
     path("medicines/", views.get_medicines, name="get-medicines"),
     path("medicines/<int:medicine_id>/", views.get_medicine_detail, name="get-medicine-detail"),
+    # Visited Pharmacies
+    path("visited-pharmacies/", views.add_visited_pharmacy, name="add-visited-pharmacy"),
+    path("visited-pharmacies/list/", views.get_visited_pharmacies, name="get-visited-pharmacies"),
+    path("visited-pharmacies/<int:pk>/delete/", views.delete_visited_pharmacy, name="delete-visited-pharmacy"),
     # ViewSet routes
     path("", include(router.urls)),
 ]
