@@ -1808,6 +1808,7 @@ def add_visited_pharmacy(request):
             notes=notes,
         )
 
+        created_items = 0
         for it in items_data:
             mid = it.get('medicine_id')
             qty = int(it.get('quantity', 1) or 1)
@@ -1820,6 +1821,14 @@ def add_visited_pharmacy(request):
                     medicine=med,
                     defaults={'quantity': qty}
                 )
+                created_items += 1
+
+        if created_items == 0:
+            pharmacy_visit.delete()
+            return Response(
+                {'success': False, 'error': 'items daxilində ən azı 1 düzgün dərman olmalıdır'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         pharmacy_visit.refresh_from_db()
         logger.info(f"[VISITED_PHARMACY] Added for user {user.username}: {pharmacy_name}")
