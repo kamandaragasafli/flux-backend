@@ -80,6 +80,12 @@
                     <span>GÖRÜLƏN APTEKLƏR</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="{% url 'dashboard_medicine_import' %}" class="nav-link {% if active_page == 'medicine_import' %}active{% endif %}">
+                    <i class="fas fa-file-word"></i>
+                    <span>DƏRMAN ANNOTASIYA IMPORT</span>
+                </a>
+            </li>
         </ul>
     </div>
 

@@ -35,6 +35,7 @@ from .views import (
     admin_dashboard_visited_doctors_user,
     admin_dashboard_visited_pharmacies,
     admin_dashboard_visited_pharmacies_user,
+    admin_dashboard_medicine_import,
 )
 
 # Router for ViewSets
@@ -74,6 +75,7 @@ urlpatterns = [
     path("dashboard/visited-doctors/user/<int:user_id>/", admin_dashboard_visited_doctors_user, name="dashboard_visited_doctors_user"),
     path("dashboard/visited-pharmacies/", admin_dashboard_visited_pharmacies, name="dashboard_visited_pharmacies"),
     path("dashboard/visited-pharmacies/user/<int:user_id>/", admin_dashboard_visited_pharmacies_user, name="dashboard_visited_pharmacies_user"),
+    path("dashboard/medicine-import/", admin_dashboard_medicine_import, name="dashboard_medicine_import"),
     path("user-dashboard/", views.user_dashboard, name="user-dashboard"),
     # External data endpoints (Solvey Pharma)
     path("external/users/", views_external.external_users, name="external-users"),

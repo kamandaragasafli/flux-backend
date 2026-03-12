@@ -2090,3 +2090,75 @@ def admin_dashboard_visited_pharmacies_user(request, user_id):
         'filter_param': filter_param,
     }
     return render(request, 'dashboard_visited_pharmacies_user.html', context)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Dərman annotasiya import (Word)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _extract_medicine_name_from_filename(filename):
+    """Fayl adından dərman adını çıxar: 'BETASOL Annotasiya.docx' -> 'BETASOL'"""
+    import re
+    base = filename
+    for ext in ('.docx', '.doc'):
+        if base.lower().endswith(ext):
+            base = base[:-len(ext)]
+            break
+    # "Annotasiya", "anotasiya", "250ml", "100ML", "N10" və s. çıxar
+    base = re.sub(r'\s+Annotasiya\s*|\s+anotasiya\s*|\s+\d+\s*ml\s*|\s*ML\s*|\s+N\d+\s*', ' ', base, flags=re.I).strip()
+    # İlk sözü götür
+    parts = base.split()
+    return parts[0].strip() if parts else base.strip() or filename
+
+
+@login_required
+@user_passes_test(is_staff_user)
+def admin_dashboard_medicine_import(request):
+    """Dashboard: Word fayldan dərman annotasiyası import"""
+    from docx import Document
+
+    error_msg = None
+    success_msg = None
+
+    if request.method == 'POST' and request.FILES.get('docfile'):
+        docfile = request.FILES['docfile']
+        medicine_name = (request.POST.get('medicine_name') or '').strip()
+
+        if not medicine_name:
+            medicine_name = _extract_medicine_name_from_filename(docfile.name)
+
+        if not medicine_name:
+            error_msg = 'Dərman adı təyin edilmədi.'
+        else:
+            try:
+                doc = Document(docfile)
+                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                content = '\n\n'.join(paragraphs).strip()
+                if not content:
+                    error_msg = 'Word faylda mətn tapılmadı.'
+                else:
+                    # Medicine tap və ya yarat
+                    med = Medicine.objects.filter(
+                        Q(name__iexact=medicine_name) | Q(name_az__iexact=medicine_name)
+                    ).first()
+                    if not med:
+                        med = Medicine.objects.create(
+                            name=medicine_name,
+                            name_az=medicine_name,
+                            annotation=content,
+                        )
+                        success_msg = f'"{medicine_name}" yeni dərman yaradıldı, annotasiya əlavə edildi.'
+                    else:
+                        med.annotation = content
+                        med.save()
+                        success_msg = f'"{medicine_name}" annotasiyası yeniləndi.'
+            except Exception as e:
+                logger.exception('[MEDICINE_IMPORT] Error')
+                error_msg = str(e)
+
+    context = {
+        'active_page': 'medicine_import',
+        'error_msg': error_msg,
+        'success_msg': success_msg,
+    }
+    return render(request, 'dashboard_medicine_import.html', context)
