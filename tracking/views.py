@@ -1817,7 +1817,11 @@ def add_visited_pharmacy(request):
             qty = int(it.get('quantity', 1) or 1)
             if not mid or qty < 1:
                 continue
-            med = Medicine.objects.filter(id=mid).first()
+            # mobile medicines list uses Solvey external id as "id"
+            med = (
+                Medicine.objects.filter(id=mid).first()
+                or Medicine.objects.filter(solvey_id=mid).first()
+            )
             if med:
                 VisitedPharmacyItem.objects.update_or_create(
                     visited_pharmacy=pharmacy_visit,
@@ -1900,6 +1904,12 @@ def admin_dashboard_visited_pharmacies(request):
 
     if sel_user_id:
         visits_qs = visits_qs.filter(user_id=sel_user_id)
+
+    # Default date range: today
+    if not date_from and not date_to and not export:
+        today_str = date.today().strftime('%Y-%m-%d')
+        date_from = today_str
+        date_to = today_str
 
     if date_from:
         try:
@@ -2017,12 +2027,17 @@ def admin_dashboard_visited_pharmacies(request):
             ws.freeze_panes = "A2"
 
             bio = BytesIO()
-            wb.save(bio); bio.seek(0)
-            from django.http import HttpResponse
+            wb.save(bio)
+            bio.seek(0)
+            from django.http import FileResponse
             fname = f"aptek-hesabati-{date.today().strftime('%Y%m%d')}.xlsx"
-            resp = HttpResponse(bio.getvalue(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+            resp = FileResponse(
+                bio,
+                as_attachment=True,
+                filename=fname,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            resp["Cache-Control"] = "no-store"
             return resp
         except Exception as exc:
             logger.exception("[PHARMACY_REPORT] Excel export error")
