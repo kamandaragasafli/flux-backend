@@ -1810,7 +1810,10 @@ def add_visited_pharmacy(request):
 
         created_items = 0
         for it in items_data:
-            mid = it.get('medicine_id')
+            # Accept both shapes:
+            # - mobile: { medicine_id, quantity }
+            # - serializer-like: { medicine, quantity }
+            mid = it.get('medicine_id') or it.get('medicine')
             qty = int(it.get('quantity', 1) or 1)
             if not mid or qty < 1:
                 continue
@@ -1934,7 +1937,7 @@ def admin_dashboard_visited_pharmacies(request):
             'total': total,
         })
 
-    if export and rows:
+    if export:
         try:
             from openpyxl import Workbook
             from openpyxl.utils import get_column_letter
@@ -1974,8 +1977,8 @@ def admin_dashboard_visited_pharmacies(request):
                     cell.alignment = Alignment(horizontal="center" if col != 2 else "left", vertical="center")
 
             # Totals row (same as dashboard footer)
-            col_totals = [sum(r['qtys'][i] for r in rows) for i in range(len(medicine_cols))]
-            grand_total = sum(r['total'] for r in rows)
+            col_totals = [sum(r['qtys'][i] for r in rows) for i in range(len(medicine_cols))] if rows else [0 for _ in range(len(medicine_cols))]
+            grand_total = sum(r['total'] for r in rows) if rows else 0
             total_row_idx = len(rows) + 2
 
             ws.cell(row=total_row_idx, column=1, value="Cəmi:").font = tot_font
