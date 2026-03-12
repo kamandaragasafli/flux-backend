@@ -1817,11 +1817,17 @@ def add_visited_pharmacy(request):
             qty = int(it.get('quantity', 1) or 1)
             if not mid or qty < 1:
                 continue
-            # mobile medicines list uses Solvey external id as "id"
-            med = (
-                Medicine.objects.filter(id=mid).first()
-                or Medicine.objects.filter(solvey_id=mid).first()
-            )
+            # Mobile /api/medicines/ returns Solvey external "id" as medicine id.
+            # Try local pk → solvey_id → auto-create.
+            med = Medicine.objects.filter(id=mid).first()
+            if not med:
+                med = Medicine.objects.filter(solvey_id=mid).first()
+            if not med:
+                med_name = str(it.get('medicine_name') or '').strip() or f'Derman #{mid}'
+                med, _ = Medicine.objects.get_or_create(
+                    solvey_id=mid,
+                    defaults={'name': med_name, 'name_az': med_name}
+                )
             if med:
                 VisitedPharmacyItem.objects.update_or_create(
                     visited_pharmacy=pharmacy_visit,
@@ -2053,6 +2059,7 @@ def admin_dashboard_visited_pharmacies(request):
         'date_from': date_from,
         'date_to': date_to,
         'medicine_cols': medicine_cols,
+        'medicine_names': [name for _, name in medicine_cols],  # template-ə plain list
         'rows': rows,
         'col_totals': col_totals,
         'grand_total': grand_total,
