@@ -1798,8 +1798,11 @@ def add_visited_pharmacy(request):
             return Response({'success': False, 'error': 'pharmacy_name is required'}, status=status.HTTP_400_BAD_REQUEST)
         if visit_type not in ('sale', 'order'):
             return Response({'success': False, 'error': 'visit_type must be sale or order'}, status=status.HTTP_400_BAD_REQUEST)
-        if not items_data or not isinstance(items_data, list):
-            return Response({'success': False, 'error': 'items (minimum 1 dərman) tələb olunur'}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(items_data, list):
+            items_data = []
+        # Satış üçün ən azı 1 dərman lazımdır; sifariş/qeyd üçün items boş ola bilər
+        if visit_type == 'sale' and (not items_data or len(items_data) == 0):
+            return Response({'success': False, 'error': 'Satış üçün ən azı 1 dərman əlavə edin'}, status=status.HTTP_400_BAD_REQUEST)
 
         pharmacy_visit = VisitedPharmacy.objects.create(
             user=user,
@@ -1836,10 +1839,10 @@ def add_visited_pharmacy(request):
                 )
                 created_items += 1
 
-        if created_items == 0:
+        if visit_type == 'sale' and created_items == 0:
             pharmacy_visit.delete()
             return Response(
-                {'success': False, 'error': 'items daxilində ən azı 1 düzgün dərman olmalıdır'},
+                {'success': False, 'error': 'Satış üçün ən azı 1 dərman əlavə edin'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
