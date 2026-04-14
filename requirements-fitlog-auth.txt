@@ -1,0 +1,4 @@
+# Əsas Django layihənizdə artıq varsa təkrarlamayın
+# djangorestframework
+# djangorestframework-simplejwt
+google-auth>=2.0.0

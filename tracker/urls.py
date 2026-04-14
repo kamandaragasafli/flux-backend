@@ -10,6 +10,7 @@ urlpatterns = [
     path("login/", auth_views.LoginView.as_view(template_name="login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("dashboard/", admin_dashboard_home, name="admin_dashboard"),
+    path("api/", include("fitlog_auth.urls")),
     path("api/", include("tracking.urls")),
 ] 
 if settings.DEBUG:

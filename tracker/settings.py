@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "tracking",
+    "fitlog_auth",
 ]
 
 MIDDLEWARE = [

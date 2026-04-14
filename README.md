@@ -1,113 +1,83 @@
-# Flux Tracker Backend
+# Fitlog mobil — backend auth modulu
 
-Django REST Framework ile geliştirilmiş GPS tracking backend uygulaması.
+Bu qovluq **Solvey Pharma** Django layihəsinə **kopyalanıb** birləşdirilmə üçündür. Burada tam Django layihəsi yoxdur; yalnız **`fitlog_auth`** tətbiqi və qoşma təlimatı var.
 
-## Özellikler
+## URL-lər (mobil `EXPO_PUBLIC_API_BASE_URL=https://app.solveypharma.com.az/api` olduqda)
 
-- PostgreSQL ve SQLite veritabanı desteği
-- JWT Authentication
-- RESTful API
-- CORS desteği
-- Production-ready yapılandırma
+| Metod | Path | Təsvir |
+|--------|------|--------|
+| POST | `/api/auth/register/` | `{"email","password"}` → `201` + JWT |
+| POST | `/api/auth/login/` | `{"email","password"}` → `200` + JWT |
+| POST | `/api/auth/google/` | `{"id_token"}` → `200` + JWT |
+| GET | `/api/auth/me/` | `Authorization: Bearer <access>` → istifadəçi |
 
-## Hızlı Başlangıç
+Cavab formatı: `{"access": "...", "refresh": "..."}` (djangorestframework-simplejwt).
 
-### Gereksinimler
+## Quraşdırma
 
-- Python 3.11+
-- PostgreSQL 12+
-- pip
+1. **`fitlog_auth`** qovluğunu öz Django layihənizin kökünə kopyalayın ( `manage.py` ilə eyni səviyyədə olan `apps/` və ya birbaşa `fitlog_auth/`).
 
-### Kurulum
+2. **`settings.py`**:
+   ```python
+   INSTALLED_APPS = [
+       # ...
+       "rest_framework",
+       "rest_framework_simplejwt",
+       "fitlog_auth",
+   ]
 
-1. **Virtual environment oluştur:**
-```bash
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-```
+   REST_FRAMEWORK = {
+       "DEFAULT_AUTHENTICATION_CLASSES": (
+           "rest_framework_simplejwt.authentication.JWTAuthentication",
+           # mövcud session auth və s. saxlaya bilərsiniz
+       ),
+   }
 
-2. **Bağımlılıkları yükle:**
-```bash
-pip install -r requirements.txt
-```
+   from datetime import timedelta
+   SIMPLE_JWT = {
+       "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+       "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+   }
 
-3. **Environment variables ayarla:**
-```bash
-cp env.example .env
-# .env dosyasını düzenle
-# Local için: USE_SQLITE=true
-# Server için: USE_SQLITE=false ve PostgreSQL ayarlarını ekle
-```
+   # Google mobil girişi üçün (Web client id — Google Cloud)
+   GOOGLE_OAUTH_CLIENT_ID = "....apps.googleusercontent.com"
+   ```
 
-4. **PostgreSQL veritabanı oluştur (sadece server için gerekli):**
-```bash
-# Eğer USE_SQLITE=false kullanıyorsanız:
-sudo -u postgres psql
-CREATE DATABASE flux_tracker;
-CREATE USER flux_user WITH PASSWORD 'your-password';
-GRANT ALL PRIVILEGES ON DATABASE flux_tracker TO flux_user;
-\q
-```
+3. **Əsas `urls.py`** — `api/` prefiksi altında (sizdə artıq `DefaultRouter` varsa eyni `api/` include-a əlavə edin):
 
-5. **Migration'ları çalıştır:**
-```bash
-python manage.py migrate
-```
+   ```python
+   urlpatterns = [
+       path("api/", include("fitlog_auth.urls")),
+       # mövcud: path("api/", include(router.urls)),
+   ]
+   ```
 
-6. **Superuser oluştur:**
-```bash
-python manage.py createsuperuser
-```
+   **Diqqət:** Əgər `api/` üçün yalnız bir `include` istifadə edirsinizsə, `urlpatterns`-ə **hər iki** `include`-u eyni `api/` prefiksi ilə əlavə etmək olar — Django üst-üstə düşən path-ləri birləşdirir.
 
-7. **Development server'ı başlat:**
-```bash
-python manage.py runserver
-```
+4. **Paketlər:**
+   ```bash
+   pip install djangorestframework djangorestframework-simplejwt google-auth
+   ```
+   (`requirements-fitlog_auth.txt` istinad üçündür.)
 
-## Database Yapılandırması
+5. **CORS** (Expo mobil üçün) — `django-cors-headers` ilə brauzer/mobil origin-ləri icazə verin.
 
-Backend, environment variable ile SQLite veya PostgreSQL arasında seçim yapabilir:
+6. **İstifadəçi modeli:** Standart `User` — qeydiyyatda `username=email` yazılır. Öz `AbstractUser` istifadə edirsinizsə, `views.py` / `serializers.py`-də uyğunlaşdırın.
 
-**Local Development (.env dosyasında):**
-```env
-USE_SQLITE=true
-```
+7. **Migrasiya:** Yeni model əlavə olunmayıb; mövcud `auth_user` cədvəli istifadə olunur.
 
-**Server/Production (.env dosyasında):**
-```env
-USE_SQLITE=false
-DB_NAME=flux_tracker
-DB_USER=postgres
-DB_PASSWORD=your-password
-DB_HOST=localhost
-DB_PORT=5432
-```
+## Təhlükəsizlik
 
-## Production Deployment
+- Prod-da `DEBUG=False`, HTTPS, rate limit, parol siyasəti.
+- Google üçün yalnız etibarlı `id_token` qəbul edilir.
 
-Detaylı deployment rehberi için [DEPLOY.md](DEPLOY.md) dosyasına bakın.
+## Mobil layihə
 
-## API Endpoints
+`mobile/.env` içində `EXPO_PUBLIC_API_BASE_URL` və lazım olsa `EXPO_PUBLIC_API_*_PATH` dəyərləri bu path-lərlə üst-üstə düşməlidir (default artıq `auth/login/` və s.).
 
-- `/api/auth/login/` - Kullanıcı girişi
-- `/api/auth/register/` - Kullanıcı kaydı
-- `/api/routes/` - Route yönetimi
-- `/api/locations/` - Lokasyon takibi
+## Windows: `runserver` — WinError 10013
 
-## Veritabanı
-
-- **Local Development:** `USE_SQLITE=true` ile SQLite kullanılır (hızlı başlangıç)
-- **Server/Production:** `USE_SQLITE=false` ile PostgreSQL kullanılır (production için gerekli)
-
-## Güvenlik
-
-- Production'da `DEBUG=False` olmalı
-- `SECRET_KEY` environment variable olarak saklanmalı
-- `.env` dosyası git'e commit edilmemeli
-- HTTPS kullanılmalı
-- CORS ayarları production için sınırlandırılmalı
-
-## Lisans
-
-Bu proje özel bir projedir.
-
+1. **Port məşğuldur:** `8000` / `8001` üçün köhnə `python.exe` (runserver) işləyir — Tapşırıq Menecerində sonlandırın və ya boş port seçin, məs.: `py manage.py runserver 127.0.0.1:9000`.
+2. **StatReloader:** Bəzən avtomatik yenidən yükləmə əlavə socket açır və 10013 verir. Sınaq:  
+   `py manage.py runserver 127.0.0.1:9000 --noreload`
+3. Antivirus / firewall müvəqqəti söndürüb yenidən yoxlayın.
